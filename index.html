@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<title>Rhythm Steps</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#playfield">Skip to playfield</a>
+<div id="app">
+
+  <!-- ======== Playfield (canvas + HUD + DOM lane mirror) ======== -->
+  <main id="playfield" class="hidden" aria-label="Playfield">
+    <div id="canvas-host"></div>
+
+    <div id="hud" aria-hidden="false">
+      <div id="hud-top">
+        <div id="hud-objective" role="status" aria-live="polite">Objective</div>
+        <div id="hud-progress"><div id="hud-progress-fill"></div></div>
+        <button id="btn-pause" class="icon-btn" aria-label="Pause (Escape)">⏸</button>
+      </div>
+      <div id="hud-score-row">
+        <div id="hud-score" aria-label="Score">0</div>
+        <div id="hud-combo" aria-label="Combo"></div>
+        <div id="hud-acc" aria-label="Accuracy"></div>
+        <div id="hud-health" class="hidden" aria-label="Health"></div>
+      </div>
+    </div>
+
+    <div id="judgment-pop" aria-hidden="true"></div>
+    <div id="caption-line" aria-live="polite" class="sr-only-polite"></div>
+    <div id="countdown-overlay" class="hidden" aria-live="assertive"></div>
+    <div id="lesson-overlay" class="hidden">
+      <div id="lesson-text"></div>
+      <div id="lesson-progress"></div>
+    </div>
+
+    <!-- DOM lane controls: accessibility mirror of the canvas + touch targets -->
+    <div id="lane-buttons" role="group" aria-label="Note lanes">
+      <button class="lane-btn" data-lane="0" aria-label="Lane 1 (D)"><span class="lane-key">D</span></button>
+      <button class="lane-btn" data-lane="1" aria-label="Lane 2 (F)"><span class="lane-key">F</span></button>
+      <button class="lane-btn" data-lane="2" aria-label="Lane 3 (J)"><span class="lane-key">J</span></button>
+      <button class="lane-btn" data-lane="3" aria-label="Lane 4 (K)"><span class="lane-key">K</span></button>
+    </div>
+  </main>
+
+  <!-- ======== Title ======== -->
+  <section id="screen-title" class="screen" aria-labelledby="title-h">
+    <div class="panel title-panel">
+      <h1 id="title-h" class="game-logo">Rhythm <span>Steps</span></h1>
+      <p class="tagline">A concert causeway made of light. Tap on beat, hold the glow, keep the streak.</p>
+      <button id="btn-play" class="btn btn-primary btn-big">Play</button>
+      <div class="title-grid">
+        <button class="btn mode-btn" data-mode="journey">Journey <small id="title-journey-status"></small></button>
+        <button class="btn mode-btn" data-mode="daily">Daily <small id="title-daily-status"></small></button>
+        <button class="btn mode-btn" data-mode="practice">Practice</button>
+        <button class="btn mode-btn" data-mode="challenge">Challenge</button>
+        <button class="btn mode-btn" data-mode="chase">Score Chase</button>
+        <button class="btn mode-btn" data-mode="learn">Learn</button>
+      </div>
+      <div class="title-footer">
+        <button class="btn btn-ghost" data-nav="settings">Settings</button>
+        <button class="btn btn-ghost" data-nav="help">Help</button>
+        <button class="btn btn-ghost" data-nav="profile">Profile</button>
+      </div>
+      <p id="compat-note" class="compat-note hidden">3D graphics unavailable — running the simplified renderer. Your progress is unaffected.</p>
+    </div>
+  </section>
+
+  <!-- ======== Mode setup ======== -->
+  <section id="screen-setup" class="screen hidden" aria-labelledby="setup-h">
+    <div class="panel">
+      <h2 id="setup-h">Setup</h2>
+      <p id="setup-desc"></p>
+      <ul id="setup-rules" class="rule-list"></ul>
+      <dl class="setup-meta">
+        <div><dt>Duration</dt><dd id="setup-duration"></dd></div>
+        <div><dt>Players</dt><dd>1</dd></div>
+        <div><dt>Ranked</dt><dd id="setup-ranked"></dd></div>
+        <div><dt>Assists</dt><dd id="setup-assists"></dd></div>
+      </dl>
+      <div class="row">
+        <button id="btn-setup-start" class="btn btn-primary">Start</button>
+        <button class="btn btn-ghost" data-nav="title">Back</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== Journey ======== -->
+  <section id="screen-journey" class="screen hidden" aria-labelledby="journey-h">
+    <div class="panel panel-wide">
+      <h2 id="journey-h">Journey</h2>
+      <p>Forty stages across five causeways. Mastery stages test everything learned so far.</p>
+      <div id="journey-grid" class="stage-grid" role="list"></div>
+      <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Practice ======== -->
+  <section id="screen-practice" class="screen hidden" aria-labelledby="practice-h">
+    <div class="panel">
+      <h2 id="practice-h">Practice</h2>
+      <p>Unranked. Pick a difficulty; restart as often as you like.</p>
+      <div id="practice-list" class="stack" role="radiogroup" aria-label="Difficulty"></div>
+      <label class="field">Theme
+        <select id="practice-theme"></select>
+      </label>
+      <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Challenge ======== -->
+  <section id="screen-challenge" class="screen hidden" aria-labelledby="challenge-h">
+    <div class="panel">
+      <h2 id="challenge-h">Challenges</h2>
+      <p>Constrained goals for a sharpened run.</p>
+      <div id="challenge-list" class="stack"></div>
+      <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Learn ======== -->
+  <section id="screen-learn" class="screen hidden" aria-labelledby="learn-h">
+    <div class="panel">
+      <h2 id="learn-h">Learn</h2>
+      <p>Interactive lessons — one rule at a time. You must perform each action to advance.</p>
+      <div id="lesson-list" class="stack"></div>
+      <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Score chase ======== -->
+  <section id="screen-chase" class="screen hidden" aria-labelledby="chase-h">
+    <div class="panel">
+      <h2 id="chase-h">Score Chase</h2>
+      <p>Same seed, same chart — compare scores asynchronously. Share the seed with friends.</p>
+      <label class="field">Seed <input id="chase-seed" inputmode="numeric" placeholder="e.g. 123456"></label>
+      <label class="field">Difficulty
+        <select id="chase-difficulty"></select>
+      </label>
+      <div class="row">
+        <button id="btn-chase-start" class="btn btn-primary">Play this seed</button>
+        <button id="btn-chase-random" class="btn">Random seed</button>
+      </div>
+      <h3>Local board</h3>
+      <ol id="chase-board" class="board"></ol>
+      <p id="chase-hosted-note" class="muted hidden">Hosted boards validate replays server-side. Local boards are casual.</p>
+      <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Results ======== -->
+  <section id="screen-results" class="screen hidden" aria-labelledby="results-h">
+    <div class="panel">
+      <h2 id="results-h">Results</h2>
+      <div id="results-grade" class="grade-badge">S</div>
+      <p id="results-headline"></p>
+      <table class="breakdown">
+        <tbody>
+          <tr><th scope="row">Notes</th><td id="res-base"></td></tr>
+          <tr><th scope="row">Combo bonus</th><td id="res-combo-bonus"></td></tr>
+          <tr><th scope="row">Hold bonus</th><td id="res-hold"></td></tr>
+          <tr class="total-row"><th scope="row">Total</th><td id="res-total"></td></tr>
+        </tbody>
+      </table>
+      <div id="res-counts" class="counts-row"></div>
+      <p id="res-detail" class="muted"></p>
+      <div id="res-achievements" class="ach-row"></div>
+      <p id="res-xp" class="muted"></p>
+      <div class="row">
+        <button id="btn-retry" class="btn btn-primary">Retry</button>
+        <button id="btn-next" class="btn hidden">Next stage</button>
+        <button class="btn btn-ghost" data-nav="title">Home</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== Settings ======== -->
+  <section id="screen-settings" class="screen hidden" aria-labelledby="settings-h">
+    <div class="panel panel-wide">
+      <h2 id="settings-h">Settings</h2>
+      <div class="settings-cols">
+        <fieldset>
+          <legend>Audio</legend>
+          <label class="field">Music <input type="range" id="set-vol-music" min="0" max="1" step="0.05"></label>
+          <label class="field">Effects <input type="range" id="set-vol-effects" min="0" max="1" step="0.05"></label>
+          <label class="field">Ambience <input type="range" id="set-vol-ambience" min="0" max="1" step="0.05"></label>
+          <label class="field">Voice cues <input type="range" id="set-vol-voice" min="0" max="1" step="0.05"></label>
+          <label class="check"><input type="checkbox" id="set-muted"> Mute all</label>
+        </fieldset>
+        <fieldset>
+          <legend>Graphics</legend>
+          <label class="field">Quality
+            <select id="set-quality">
+              <option value="auto">Auto</option><option value="high">High</option>
+              <option value="medium">Medium</option><option value="low">Low</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="set-reduced-motion"> Reduced motion</label>
+          <label class="check"><input type="checkbox" id="set-camera-sway"> Camera sway</label>
+          <label class="field">Note speed <input type="range" id="set-note-speed" min="0.6" max="1.6" step="0.1"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Accessibility</legend>
+          <label class="check"><input type="checkbox" id="set-high-contrast"> High contrast</label>
+          <label class="check"><input type="checkbox" id="set-cvd"> Color-vision-safe palette</label>
+          <label class="check"><input type="checkbox" id="set-large-text"> Larger text</label>
+          <label class="check"><input type="checkbox" id="set-left-handed"> Left-handed lanes</label>
+          <label class="check"><input type="checkbox" id="set-captions"> Audio captions</label>
+          <label class="check"><input type="checkbox" id="set-haptics"> Haptics</label>
+          <label class="field">Hold style
+            <select id="set-hold-mode"><option value="hold">Hold</option><option value="toggle">Toggle</option></select>
+          </label>
+          <label class="field">Timing assist
+            <select id="set-timing-assist"><option value="off">Off</option><option value="wide">Wide windows (unranked)</option></select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Controls</legend>
+          <div id="key-bindings" class="stack"></div>
+          <p class="muted">Click a binding, then press a key. Touch controls are always available.</p>
+        </fieldset>
+        <fieldset>
+          <legend>Data</legend>
+          <label class="check"><input type="checkbox" id="set-telemetry"> Allow anonymous usage stats</label>
+          <button id="btn-replay-tutorial" class="btn">Replay tutorial</button>
+          <button id="btn-reset-save" class="btn btn-danger">Reset all progress</button>
+        </fieldset>
+      </div>
+      <div class="row"><button class="btn btn-ghost" data-nav="back">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Help ======== -->
+  <section id="screen-help" class="screen hidden" aria-labelledby="help-h">
+    <div class="panel panel-wide">
+      <h2 id="help-h">How to play</h2>
+      <div id="help-cards" class="help-grid"></div>
+      <div class="row"><button class="btn btn-ghost" data-nav="back">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Profile ======== -->
+  <section id="screen-profile" class="screen hidden" aria-labelledby="profile-h">
+    <div class="panel">
+      <h2 id="profile-h">Profile</h2>
+      <div class="profile-head">
+        <div id="profile-avatar" aria-hidden="true"></div>
+        <label class="field">Display name <input id="profile-name" maxlength="24"></label>
+      </div>
+      <dl class="setup-meta">
+        <div><dt>Mastery level</dt><dd id="profile-mastery"></dd></div>
+        <div><dt>Sessions</dt><dd id="profile-sessions"></dd></div>
+        <div><dt>Best combo</dt><dd id="profile-combo"></dd></div>
+        <div><dt>Days played</dt><dd id="profile-days"></dd></div>
+      </dl>
+      <h3>Achievements</h3>
+      <ul id="profile-achievements" class="ach-list"></ul>
+      <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======== Pause overlay ======== -->
+  <div id="overlay-pause" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-h">
+    <div class="panel">
+      <h2 id="pause-h">Paused</h2>
+      <div class="stack">
+        <button id="btn-resume" class="btn btn-primary">Resume</button>
+        <button id="btn-pause-restart" class="btn">Restart track</button>
+        <button id="btn-pause-settings" class="btn">Settings</button>
+        <button id="btn-pause-help" class="btn">Help</button>
+        <button id="btn-leave" class="btn btn-danger">Leave track</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-host" aria-live="polite"></div>
+  <div id="sr-announcer" class="sr-only" aria-live="assertive"></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
