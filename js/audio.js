@@ -1,11 +1,24 @@
-// Audio: original procedural WebAudio only — no sampled or licensed content.
-// Buses: music / effects / ambience / voice, each independently mixed.
-// Event sounds are short synthesized transients tied to logical game events.
+// Audio: authored sample one-shots (sfx/*.opus) with original procedural
+// WebAudio synthesis as fallback — no sampled or licensed content beyond the
+// authored clips. Buses: music / effects / ambience / voice, each independently
+// mixed. Event sounds are short transients tied to logical game events.
 // Music is generated from the chart seed so replays sound identical.
 
 import { makeRng, streamSeed } from './rng.js';
 
 const PENTA = [0, 2, 4, 7, 9]; // minor pentatonic degrees
+
+// Authored sample one-shots (sfx/<name>.opus, see sfx/manifest.json) mapped
+// onto existing logical events. Samples are lazy-fetched/decoded after the
+// user-gesture unlock; the synthesized voices below remain the fallback while
+// a sample is still loading or if it fails to load.
+const SAMPLE_EVENTS = [
+  'hit-perfect', 'hit-great', 'hit-good', 'combo-milestone',
+  'hold-tick', 'miss', 'empty-hit',
+  'countdown-tick', 'countdown-go',
+  'ui-move', 'ui-confirm', 'ui-back', 'ui-error',
+  'fanfare-win', 'fanfare-loss',
+];
 
 export class AudioEngine {
   constructor() {
@@ -18,6 +31,7 @@ export class AudioEngine {
     this.captionsEnabled = true;
     this.settings = { volMusic: 0.8, volEffects: 0.9, volAmbience: 0.5, volVoice: 0.8, muted: false };
     this._sfxVariantRng = null;
+    this._sampleCache = new Map(); // name -> { buffer: AudioBuffer|null, failed: boolean }
   }
 
   // Must be called from a user gesture.
@@ -94,6 +108,36 @@ export class AudioEngine {
   }
 
   // -------------------------------------------------------------------------
+  // Authored sample playback (lazy fetch/decode/cache, effects bus).
+  // -------------------------------------------------------------------------
+  _sampleEntry(name) {
+    if (!this.ctx || !SAMPLE_EVENTS.includes(name)) return null;
+    let e = this._sampleCache.get(name);
+    if (!e) {
+      e = { buffer: null, failed: false };
+      this._sampleCache.set(name, e);
+      fetch(`sfx/${name}.opus`)
+        .then((r) => { if (!r.ok) throw new Error(`sfx ${name}: HTTP ${r.status}`); return r.arrayBuffer(); })
+        .then((ab) => this.ctx.decodeAudioData(ab))
+        .then((buf) => { e.buffer = buf; })
+        .catch(() => { e.failed = true; });
+    }
+    return e;
+  }
+
+  // Plays sfx/<name>.opus on the effects bus if decoded; returns false while
+  // loading or after failure so the caller falls back to synthesis.
+  _playSample(name) {
+    const e = this._sampleEntry(name);
+    if (!e || !e.buffer) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = e.buffer;
+    src.connect(this.buses.effects);
+    src.start();
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
   // Game event sounds (event hierarchy: ack < hit < combo/goal < completion)
   // -------------------------------------------------------------------------
   setSfxSeed(seed) { this._sfxVariantRng = makeRng(streamSeed(seed, 'sfx')); }
@@ -101,47 +145,62 @@ export class AudioEngine {
   playHit(grade, combo = 0) {
     if (!this.ctx) return;
     const fx = this.buses.effects;
-    const v = this._sfxVariantRng ? this._sfxVariantRng.next() : Math.random();
-    if (grade === 'perfect') {
-      this._blip(fx, { freq: 880 * (1 + v * 0.02), freqEnd: 1320, type: 'triangle', dur: 0.1, gain: 0.28 });
-      this._blip(fx, { freq: 1760, type: 'sine', dur: 0.07, gain: 0.12, at: 0.01 });
-    } else if (grade === 'great') {
-      this._blip(fx, { freq: 660 * (1 + v * 0.03), freqEnd: 880, type: 'triangle', dur: 0.09, gain: 0.24 });
-    } else {
-      this._blip(fx, { freq: 440, freqEnd: 520, type: 'square', dur: 0.06, gain: 0.12 });
+    const key = grade === 'perfect' ? 'hit-perfect' : grade === 'great' ? 'hit-great' : 'hit-good';
+    if (!this._playSample(key)) {
+      const v = this._sfxVariantRng ? this._sfxVariantRng.next() : Math.random();
+      if (grade === 'perfect') {
+        this._blip(fx, { freq: 880 * (1 + v * 0.02), freqEnd: 1320, type: 'triangle', dur: 0.1, gain: 0.28 });
+        this._blip(fx, { freq: 1760, type: 'sine', dur: 0.07, gain: 0.12, at: 0.01 });
+      } else if (grade === 'great') {
+        this._blip(fx, { freq: 660 * (1 + v * 0.03), freqEnd: 880, type: 'triangle', dur: 0.09, gain: 0.24 });
+      } else {
+        this._blip(fx, { freq: 440, freqEnd: 520, type: 'square', dur: 0.06, gain: 0.12 });
+      }
     }
     if (combo > 0 && combo % 25 === 0) { // combo milestone tier
-      this._blip(fx, { freq: 1046, freqEnd: 2093, type: 'sine', dur: 0.25, gain: 0.2, at: 0.02 });
+      if (!this._playSample('combo-milestone')) {
+        this._blip(fx, { freq: 1046, freqEnd: 2093, type: 'sine', dur: 0.25, gain: 0.2, at: 0.02 });
+      }
       this.caption(`Combo ${combo}!`);
     }
   }
 
   playHoldTick() {
     if (!this.ctx) return;
-    this._blip(this.buses.effects, { freq: 1200, type: 'sine', dur: 0.03, gain: 0.05 });
+    if (!this._playSample('hold-tick')) {
+      this._blip(this.buses.effects, { freq: 1200, type: 'sine', dur: 0.03, gain: 0.05 });
+    }
   }
 
   playMiss() {
     if (!this.ctx) return;
-    this._blip(this.buses.effects, { freq: 220, freqEnd: 110, type: 'sawtooth', dur: 0.18, gain: 0.16 });
-    this._noise(this.buses.effects, { dur: 0.12, gain: 0.1, filterFreq: 800, type: 'lowpass' });
+    if (!this._playSample('miss')) {
+      this._blip(this.buses.effects, { freq: 220, freqEnd: 110, type: 'sawtooth', dur: 0.18, gain: 0.16 });
+      this._noise(this.buses.effects, { dur: 0.12, gain: 0.1, filterFreq: 800, type: 'lowpass' });
+    }
     this.caption('Miss');
   }
 
   playEmptyHit() {
     if (!this.ctx) return;
-    this._noise(this.buses.effects, { dur: 0.05, gain: 0.06, filterFreq: 2500 });
+    if (!this._playSample('empty-hit')) {
+      this._noise(this.buses.effects, { dur: 0.05, gain: 0.06, filterFreq: 2500 });
+    }
   }
 
   playCountdown(n) {
     if (!this.ctx) return;
-    const freq = n === 0 ? 880 : 440;
-    this._blip(this.buses.voice, { freq, type: 'sine', dur: n === 0 ? 0.3 : 0.12, gain: 0.3 });
+    if (!this._playSample(n === 0 ? 'countdown-go' : 'countdown-tick')) {
+      const freq = n === 0 ? 880 : 440;
+      this._blip(this.buses.voice, { freq, type: 'sine', dur: n === 0 ? 0.3 : 0.12, gain: 0.3 });
+    }
     this.caption(n === 0 ? 'Go!' : String(n));
   }
 
   playUi(kind = 'move') {
     if (!this.ctx) return;
+    const key = { confirm: 'ui-confirm', back: 'ui-back', error: 'ui-error' }[kind] || 'ui-move';
+    if (this._playSample(key)) return;
     if (kind === 'confirm') this._blip(this.buses.effects, { freq: 620, freqEnd: 930, type: 'sine', dur: 0.07, gain: 0.15 });
     else if (kind === 'back') this._blip(this.buses.effects, { freq: 500, freqEnd: 330, type: 'sine', dur: 0.07, gain: 0.12 });
     else if (kind === 'error') this._blip(this.buses.effects, { freq: 200, type: 'square', dur: 0.08, gain: 0.1 });
@@ -151,11 +210,13 @@ export class AudioEngine {
   playResultFanfare(gradeLetter) {
     if (!this.ctx) return;
     const good = !['D', 'F'].includes(gradeLetter);
-    const root = good ? 523.25 : 392;
-    const seq = good ? [1, 1.25, 1.5, 2] : [1, 0.94, 0.89];
-    seq.forEach((ratio, i) => {
-      this._blip(this.buses.voice, { freq: root * ratio, type: 'triangle', dur: 0.35, gain: 0.22, at: i * 0.12 });
-    });
+    if (!this._playSample(good ? 'fanfare-win' : 'fanfare-loss')) {
+      const root = good ? 523.25 : 392;
+      const seq = good ? [1, 1.25, 1.5, 2] : [1, 0.94, 0.89];
+      seq.forEach((ratio, i) => {
+        this._blip(this.buses.voice, { freq: root * ratio, type: 'triangle', dur: 0.35, gain: 0.22, at: i * 0.12 });
+      });
+    }
     this.caption(good ? 'Track complete' : 'Track ended');
   }
 
