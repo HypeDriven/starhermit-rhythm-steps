@@ -10,7 +10,7 @@ import { strict as assert } from 'node:assert';
 import {
   createGame, applyCommand, advance, legalActions, hashState, serialize,
   scoreBreakdown, compareResults, replayEnvelope, letterGrade,
-  WINDOWS, TERMINAL, RULES_VERSION,
+  WINDOWS, TERMINAL, RULES_VERSION, chaseEntry,
 } from '../js/rules.js';
 import {
   generateChart, validateChart, journeyChart, JOURNEY_STAGES, dailyChart,
@@ -432,6 +432,37 @@ test('server rejects malformed, out-of-order, oversized, unknown messages', () =
     { id: 'b', tick: 500, type: 'tap', lane: 0 }, { id: 'a', tick: 100, type: 'tap', lane: 0 },
   ], terminal: { hash: 'x' } };
   assert.equal(handleMessage(ctx, { kind: 'validate-score', envelope: env }).error, 'commands-out-of-order');
+});
+
+test('server rejects a ranked envelope carrying the wide timing assist', () => {
+  const chart = dailyChart('2026-08-18');
+  const s = autoPlay(chart);
+  const env = {
+    rulesVersion: RULES_VERSION, contentVersion: chart.version, chartId: chart.id,
+    seed: chart.seed, assists: { timingAssist: 'wide' }, commands: s.commandLog,
+    terminal: { hash: hashState(s) },
+  };
+  const r = handleMessage({ ...serverCtx(), identity: 'assist-tester' }, { kind: 'validate-score', envelope: env });
+  assert.equal(r.error, 'assist-not-permitted');
+  assert.equal(r.rejected, true);
+});
+
+test('chase board tie-break uses compareResults and tolerates legacy entries', () => {
+  const mk = (over) => ({ name: 'x', score: 1000, total: 1000, grade: 'S', sessionId: 's', terminalReason: TERMINAL.COMPLETE, invalidActions: 0, elapsedMs: 60000, ...over });
+  const a = mk({ name: 'a', sessionId: 'a' });
+  const b = mk({ name: 'b', sessionId: 'b', invalidActions: 2, elapsedMs: 50000 });
+  // Equal score: the run with fewer invalid actions ranks first.
+  assert.ok(compareResults(chaseEntry(a), chaseEntry(b)) < 0);
+  // Same invalid actions: lower authoritative elapsed time ranks first.
+  assert.ok(compareResults(chaseEntry(mk({ elapsedMs: 70000 })), chaseEntry(mk({ elapsedMs: 60000 }))) > 0);
+  // Board sort uses the tie-break: order of equal scores is by invalid actions.
+  const rows = [b, a].sort((x, y) => compareResults(chaseEntry(x), chaseEntry(y)));
+  assert.equal(rows[0].name, 'a'); // fewer invalid actions wins the tie
+  // Legacy entries lacking tie-break fields normalize without throwing, and a
+  // strictly higher legacy score still outranks a lower one.
+  const leg = { name: 'old', score: 500, grade: 'B', sessionId: 'old' };
+  for (const e of [a, b]) assert.doesNotThrow(() => compareResults(chaseEntry(leg), chaseEntry(e)));
+  assert.ok(compareResults(chaseEntry({ ...leg, score: 2000 }), chaseEntry(a)) < 0);
 });
 
 test('server achievement delivery is idempotent and rate limiting kicks in', () => {

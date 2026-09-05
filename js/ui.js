@@ -5,6 +5,7 @@
 import { JOURNEY_STAGES, CHALLENGES, PRACTICE_DIFFICULTIES, THEMES, LESSONS, dailyInfo } from './content.js';
 import { ACHIEVEMENTS } from './persistence.js';
 import { isHosted } from './platform.js';
+import { compareResults, chaseEntry } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -66,7 +67,8 @@ export function initUI(controller) {
 export function showScreen(name, { overlay = false } = {}) {
   if (!overlay) {
     for (const s of SCREENS) $(`screen-${s}`).classList.toggle('hidden', s !== name);
-    $('playfield').classList.add('hidden');
+    // The playfield/canvas stays laid out as the backdrop behind the opaque
+    // screens (z-index 10) so the renderer keeps a real viewport size.
     hidePause();
     navStack = navStack.filter((n) => n !== name);
     navStack.push(name);
@@ -216,7 +218,7 @@ export function renderChaseBoard(chartId = null) {
   const board = $('chase-board');
   board.innerHTML = '';
   const id = chartId || $('chase-seed').value;
-  const entries = (save.chaseBoards[id] || []).slice().sort((a, b) => b.score - a.score).slice(0, 10);
+  const entries = (save.chaseBoards[id] || []).slice().sort((a, b) => compareResults(chaseEntry(a), chaseEntry(b))).slice(0, 10);
   if (!entries.length) {
     board.innerHTML = '<li class="muted">No local scores for this seed yet.</li>';
     return;
@@ -370,7 +372,6 @@ export function showResults(breakdown, { headline, canNext, achievements = [], x
 }
 
 function showPlayfieldHiddenThen(name) {
-  $('playfield').classList.add('hidden');
   hidePause();
   hideLesson();
   countdown(null);

@@ -59,6 +59,12 @@ export function handleMessage(ctx, msg) {
         if (env.contentVersion !== CONTENT_VERSION) return { error: 'stale-content-version' };
         if (!Array.isArray(env.commands) || env.commands.length > MAX_COMMANDS) return { error: 'bad-command-log' };
         if (!env.terminal || typeof env.terminal.hash !== 'string') return { error: 'incomplete-envelope' };
+        // The timing-assist setting is authoritative only if it is applied to
+        // the client-side log either before or during replay. Because the
+        // assist rewrites the tick that is then logged (replay stays exact),
+        // the server cannot distinguish an assisted run from a perfect one, so
+        // ranked submissions must not carry the widen-window assist at all.
+        if (env.assists?.timingAssist === 'wide') return { error: 'assist-not-permitted', rejected: true };
 
         const chart = chartForEnvelope(env);
         if (!chart) return { error: 'unknown-chart' };

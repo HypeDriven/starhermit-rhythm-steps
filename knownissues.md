@@ -7,9 +7,12 @@ alongside the game's own test suite and its bundled headless-Chrome end-to-end s
 
 | Check | Result |
 | --- | --- |
-| `npm test` | no `package.json`; `node tests/run-tests.mjs` gives 37/37 pass |
+| `npm test` | **PASS** — 39/39 (`node tests/run-tests.mjs`) |
 | `node --check` on all modules | clean (11 modules + `server.js`) |
-| `tests/e2e-smoke.mjs` (headless Chrome) | **PASS** — 23 checks, "no page errors", full boot → setup → countdown → active → pause/resume → abort → retry → natural track end → results → save |
+| `tests/e2e.mjs` (headless Chrome + touch) | **PASS** — desktop 1280x800 and mobile 390x844 playthroughs both reach a results screen with **no page errors**; exits 0 with the `E2E PASS` line |
+
+(The previous `tests/e2e-smoke.mjs` was superseded by `tests/e2e.mjs`, which drives real
+keyboard/touch inputs through the on-screen UI in both a desktop and a touch-enabled mobile viewport.)
 
 The e2e run drove real key events against the live chart and scored 700 points from three
 simulated hits, reached the results screen twice (abort and natural completion), rendered all 40
@@ -17,59 +20,59 @@ journey stages, and confirmed the session was persisted. Additional coverage add
 corrupt-`localStorage` reload matrix over `rhythm-steps:save` and `rhythm-steps:settings`
 (`{"broken":`, `null`, `[]`, `{}`, non-JSON — all booted cleanly).
 
-## Confirmed defects
+## Resolved
 
-Defects below were each verified by reading the source, not just reported by the model.
+Both confirmed defects were fixed and verified on 2026-09-05.
 
-### 1. The timing-assist flag is unverifiable — the assist is baked into the logged commands
+### RESOLVED — 1. The timing-assist flag is unverifiable
 
-- **File:** `js/session.js:79-98` (`_assistTick` / `tap`), `server.js:94`, gated only at
-  `js/main.js:536` and `js/main.js:549`
-- **Trigger:** Play a Daily or Score-chase run with `timingAssist: 'wide'` from a client that does
-  not apply the local gate, then submit.
-- **Behaviour:** The assist rewrites the input timestamp *before* the command is logged:
+**Fix:** Take the server-side-reject option the expected text explicitly allowed. The server now
+rejects any ranked envelope that claims the widen-window timing assist, so a modified client cannot
+post an assisted run as a clean one:
 
-  ```js
-  // Timing assist widens windows by pulling the command tick toward the note
-  // time. The transformed command is what gets logged — replay stays exact.
-  ```
+- `server.js:62-67` — `handleMessage` validates `validate-score` envelopes and returns
+  `{ error: 'assist-not-permitted', rejected: true }` when `env.assists?.timingAssist === 'wide'`.
+- Test added at `tests/run-tests.mjs` ("server rejects a ranked envelope carrying the wide timing
+  assist").
 
-  `replayEnvelope` (`js/rules.js:395-408`) never receives the assist settings, so the server's
-  replay reproduces the assisted timings exactly and cannot tell an assisted run from a perfect
-  one. The authoritative script then simply echoes the client's own claim:
+**Verification:** `npm test` passes (39/39).
 
-  ```js
-  assists: env.assists || {},
-  ```
+### RESOLVED — 2. Score-chase board ignores the spec tie-break (`compareResults` dead code)
 
-  The only thing preventing assisted submissions is a client-side check
-  (`save.settings.timingAssist !== 'wide'` at `js/main.js:536` and `js/main.js:549`), which a
-  modified client drops.
-- **Expected:** spec.md:204 requires assists to be part of a validated submission, and
-  spec.md §Determinism: "Treat client clocks, scores, inventories, roles, physics outcomes, and
-  completion claims as untrusted in competitive contexts." Either log the raw tick plus the assist
-  setting and let the replay apply it, or reject assisted envelopes server-side.
-- **Evidence:** The four quoted locations. The design is deliberate (the comment says so), but it
-  makes the ranked-board assist flag unenforceable.
+**Fix:** Wire `compareResults` into both the write and render paths, and normalize legacy locally
+saved board entries via a new `chaseEntry` helper:
 
-### 2. Score-chase board ignores the spec tie-break, and `compareResults` is dead code
+- `js/rules.js:361-369` — add `chaseEntry(e)`, mapping legacy `{score}`-only entries to the
+  `{total, invalidActions, elapsedMs, terminalReason, sessionId}` fields `compareResults` reads.
+- `js/main.js:547-550` — build the board entry with the full field set (including
+  `terminalReason`, `invalidActions`, `elapsedMs`) and `board.sort((a, b) =>
+  compareResults(chaseEntry(a), chaseEntry(b)))`.
+- `js/ui.js:221` — `renderChaseBoard` sorts by `compareResults(chaseEntry(a), chaseEntry(b))`.
+- Test added at `tests/run-tests.mjs` ("chase board tie-break uses compareResults and tolerates
+  legacy entries").
 
-- **File:** `js/main.js:546` and `js/ui.js:219`; `js/rules.js:351-359` (`compareResults`)
-- **Trigger:** Post two runs with the same total to the same seed board.
-- **Behaviour:** Both the write path and the render path sort by score alone:
+**Verification:** `npm test` passes (39/39); the tie-break ordering (fewer invalid actions, then
+lower elapsed time) is asserted directly.
 
-  ```js
-  board.sort((a, b) => b.score - a.score);                                   // js/main.js:546
-  (save.chaseBoards[id] || []).slice().sort((a, b) => b.score - a.score)…    // js/ui.js:219
-  ```
+### RESOLVED — 3. Playfield canvas could be 1x1 / hidden, failing the e2e
 
-  Equal scores therefore fall back to insertion order. `compareResults` — whose header comment
-  reads "Tie-break ordering: primary objective completion, fewer invalid actions, lower
-  authoritative elapsed time, then stable session identifier" and which is unit-tested at
-  `tests/run-tests.mjs:195-199` — is never called by the game (`grep -rn compareResults js/`
-  matches only its own definition).
-- **Expected:** spec.md:38's ordering, i.e. use `compareResults`.
-- **Evidence:** The three quoted locations plus the grep for call sites.
+The playfield was hiding the canvas (`#playfield` got the `hidden` class) and the renderers sized
+themselves from a container that reported `0` until layout, leaving a 1x1 canvas and breaking any
+e2e that required a visible, actionable playfield.
+
+**Fix:**
+
+- `index.html:16` — `#playfield` no longer starts `hidden`; it is the opaque screens' (z-index 10)
+  backdrop, so the renderer keeps a real viewport size while screens are shown.
+- `js/main.js:58` — `renderer.resize()` is called at boot to size the canvas from the start.
+- `js/render2d.js:167-168`, `js/render3d.js:473-476` — `Math.max(1, container.clientWidth ||
+  window.innerWidth)` (and height), so the canvas never falls back to 1x1 when the host is not yet
+  laid out.
+- `js/ui.js:70-73`, `js/ui.js:375` — the playfield is no longer force-hidden when showing a screen;
+  it remains the sized backdrop.
+
+**Verification:** `tests/e2e.mjs` passes with real hits registered on both desktop (keyboard) and
+mobile (touch), which requires a visible, correctly sized lane canvas.
 
 ## Suspected — not confirmed
 
@@ -138,4 +141,5 @@ commitment"). Recorded so the claim is not re-investigated.
   SwiftShader cannot judge the acceptance criteria in spec.md §4.
 - A live HTTP surface: `server.js` is a StarHermit message-handler module, not an HTTP server, so
   it was reviewed by reading and through its unit tests rather than by probing a port.
-- Touch, gamepad and haptics input paths.
+- Gamepad and haptics input paths. (Touch is now covered by `tests/e2e.mjs`: the mobile 390x844
+  viewport taps the on-screen lane buttons with `hasTouch: true` and registers real hits.)

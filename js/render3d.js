@@ -470,8 +470,10 @@ export class Renderer3D {
 
   resize() {
     if (!this.renderer) return;
-    const w = Math.max(1, this.container.clientWidth);
-    const h = Math.max(1, this.container.clientHeight);
+    // Fall back to the viewport when the host is not yet laid out, so the
+    // playfield canvas is never left at the default 1x1.
+    const w = Math.max(1, this.container.clientWidth || window.innerWidth);
+    const h = Math.max(1, this.container.clientHeight || window.innerHeight);
     this.camera.aspect = w / h;
     this._applyFraming();
     this.camera.aspect = w / h;

@@ -358,6 +358,18 @@ export function compareResults(a, b) {
   return String(a.sessionId || '').localeCompare(String(b.sessionId || ''));
 }
 
+// Normalize a score-chase board entry to the fields compareResults reads, so
+// legacy locally-saved entries that lack tie-break fields still order sanely.
+export function chaseEntry(e) {
+  return {
+    total: e.total ?? e.score ?? 0,
+    invalidActions: e.invalidActions ?? 0,
+    elapsedMs: e.elapsedMs ?? 0,
+    terminalReason: e.terminalReason ?? TERMINAL.COMPLETE,
+    sessionId: e.sessionId ?? '',
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Serialization + deterministic hashing (replay envelope state hashes)
 // ---------------------------------------------------------------------------

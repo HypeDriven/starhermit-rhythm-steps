@@ -15,6 +15,7 @@ import {
   journeyChart, JOURNEY_STAGES, dailyChart, practiceChart, challengeChart,
   scoreChaseChart, lessonChart, LESSONS, getTheme, CVD_PALETTE, CHALLENGES,
 } from './content.js';
+import { compareResults, chaseEntry } from './rules.js';
 
 // Game-state model: boot → title → profile-ready → mode-select → preparing →
 // tutorial/countdown → active ↔ paused → resolving → results → progression.
@@ -54,6 +55,7 @@ function boot() {
 
   phase = 'title';
   ui.showScreen('title');
+  renderer.resize(); // size the playfield canvas to the viewport from boot
   platform.startActivity();
   window.addEventListener('beforeunload', () => { platform.endActivity(); writeSave(save); });
   requestAnimationFrame(frame);
@@ -542,8 +544,8 @@ function onTerminal(breakdown, envelope) {
   } else if (currentMode === 'chase') {
     const key = `${currentContext.seed}`;
     const board = save.chaseBoards[key] || (save.chaseBoards[key] = []);
-    board.push({ name: save.profile.displayName, score: breakdown.total, grade: breakdown.grade, sessionId: breakdown.sessionId });
-    board.sort((a, b) => b.score - a.score);
+    board.push({ name: save.profile.displayName, score: breakdown.total, total: breakdown.total, grade: breakdown.grade, sessionId: breakdown.sessionId, terminalReason: breakdown.terminalReason, invalidActions: breakdown.invalidActions, elapsedMs: breakdown.elapsedMs });
+    board.sort((a, b) => compareResults(chaseEntry(a), chaseEntry(b)));
     save.chaseBoards[key] = board.slice(0, 20);
     headline = completed ? 'Score posted to the seed board' : 'Run ended';
     if (completed && save.settings.timingAssist !== 'wide') platform.submitScore(envelope);
