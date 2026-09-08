@@ -14,7 +14,10 @@ export class Renderer2D {
     this.cvd = !!options.cvdPalette;
     this.reducedMotion = !!options.reducedMotion;
     this.noteSpeed = options.noteSpeed || 1;
+    this.mirrorLanes = !!options.mirrorLanes;
     this.onLaneInput = options.onLaneInput || (() => {});
+    this._cssW = 1;
+    this._cssH = 1;
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'game-canvas game-canvas-2d';
     this.canvas.style.touchAction = 'none';
@@ -29,6 +32,11 @@ export class Renderer2D {
   }
 
   get is3D() { return false; }
+
+  // Screen column for a logical lane (mirrored for the left-handed layout, so
+  // the canvas always matches the on-screen lane button order).
+  _col(lane) { return this.mirrorLanes ? 3 - lane : lane; }
+  setMirrorLanes(v) { this.mirrorLanes = !!v; }
 
   _bindPointer() {
     this._activePointers = new Map();
@@ -54,8 +62,9 @@ export class Renderer2D {
   laneAt(clientX) {
     const rect = this.canvas.getBoundingClientRect();
     const laneW = rect.width / 4;
-    const lane = Math.floor((clientX - rect.left) / laneW);
-    return lane >= 0 && lane < 4 ? lane : null;
+    const col = Math.floor((clientX - rect.left) / laneW);
+    if (!(col >= 0 && col < 4)) return null;
+    return this._col(col); // symmetric mapping: column -> lane
   }
 
   pressLane(lane, held) { this._laneHeld[lane] = held; if (held) this._laneFlash[lane] = 1; }
@@ -78,9 +87,9 @@ export class Renderer2D {
   update(snap, dtMs) {
     const dt = Math.min(dtMs, 100) / 1000;
     this._time += dt;
-    const { ctx, canvas } = this;
-    const w = canvas.width / (devicePixelRatio || 1);
-    const h = canvas.height / (devicePixelRatio || 1);
+    const { ctx } = this;
+    const w = this._cssW;
+    const h = this._cssH;
     const t = this.theme;
     const laneW = w / 4;
     const judgeY = h * 0.85;
@@ -91,18 +100,19 @@ export class Renderer2D {
 
     // Lanes.
     for (let i = 0; i < 4; i++) {
+      const x0 = this._col(i) * laneW;
       const flash = this._laneFlash[i];
       ctx.fillStyle = hex(t.lane);
-      ctx.fillRect(i * laneW + 2, 0, laneW - 4, h);
+      ctx.fillRect(x0 + 2, 0, laneW - 4, h);
       if (flash > 0 || this._laneHeld[i]) {
         ctx.fillStyle = hex(this.cvd ? this.options.cvdColors.laneEdge : t.laneEdge);
         ctx.globalAlpha = Math.min(0.5, flash * 0.4 + (this._laneHeld[i] ? 0.15 : 0));
-        ctx.fillRect(i * laneW + 2, 0, laneW - 4, h);
+        ctx.fillRect(x0 + 2, 0, laneW - 4, h);
         ctx.globalAlpha = 1;
       }
       ctx.strokeStyle = hex(this.cvd ? this.options.cvdColors.laneEdge : t.laneEdge);
       ctx.globalAlpha = 0.5;
-      ctx.strokeRect(i * laneW + 2, 0, laneW - 4, h);
+      ctx.strokeRect(x0 + 2, 0, laneW - 4, h);
       ctx.globalAlpha = 1;
     }
 
@@ -111,7 +121,7 @@ export class Renderer2D {
     ctx.fillRect(0, judgeY - 2, w, 4);
     for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      ctx.arc(i * laneW + laneW / 2, judgeY, laneW * 0.28 * (this._laneHeld[i] ? 1.15 : 1), 0, Math.PI * 2);
+      ctx.arc(this._col(i) * laneW + laneW / 2, judgeY, laneW * 0.28 * (this._laneHeld[i] ? 1.15 : 1), 0, Math.PI * 2);
       ctx.strokeStyle = hex(this.cvd ? this.options.cvdColors.receptor : t.receptor);
       ctx.lineWidth = 3;
       ctx.stroke();
@@ -124,7 +134,7 @@ export class Renderer2D {
         const timeUntil = n.time - snap.tick;
         if (n.state === 'pending' && timeUntil > leadMs) continue;
         const yFor = (until) => judgeY - (Math.max(until, 0) / leadMs) * judgeY;
-        const x = n.lane * laneW + laneW / 2;
+        const x = this._col(n.lane) * laneW + laneW / 2;
         if (n.kind === 'tap') {
           const y = n.state === 'holding' ? judgeY : yFor(timeUntil);
           ctx.fillStyle = hex(this.cvd ? this.options.cvdColors.note : t.note);
@@ -149,7 +159,7 @@ export class Renderer2D {
     this._effects = this._effects.filter((fx) => fx.age < 1);
     for (const fx of this._effects) {
       fx.age += dt * (this.reducedMotion ? 2.5 : 1.6);
-      const x = fx.lane * laneW + laneW / 2;
+      const x = this._col(fx.lane) * laneW + laneW / 2;
       ctx.beginPath();
       ctx.arc(x, judgeY, laneW * (0.25 + fx.age * 0.5), 0, Math.PI * 2);
       ctx.strokeStyle = fx.color;
@@ -170,6 +180,8 @@ export class Renderer2D {
     this.canvas.height = h * dpr;
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
+    this._cssW = w;
+    this._cssH = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 

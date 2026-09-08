@@ -27,9 +27,24 @@ function rateLimited(identity) {
   return b.count > 5;
 }
 
-function chartForEnvelope(env) {
+// A daily result is only ranked for the day it belongs to. The previous UTC
+// day stays acceptable so a run started just before midnight (or delayed in
+// flight) still validates; anything older is a replay of a favourable past day.
+const DAILY_GRACE_DAYS = 1;
+function dailyDateAcceptable(dateString, nowMs) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false;
+  const chartDay = Date.parse(`${dateString}T00:00:00Z`);
+  if (!Number.isFinite(chartDay)) return false;
+  const today = Date.parse(`${new Date(nowMs).toISOString().slice(0, 10)}T00:00:00Z`);
+  const ageDays = Math.round((today - chartDay) / 86400000);
+  return ageDays >= 0 && ageDays <= DAILY_GRACE_DAYS;
+}
+
+function chartForEnvelope(env, nowMs) {
   if (env.chartId?.startsWith('daily-')) {
-    return dailyChart(env.chartId.slice('daily-'.length));
+    const date = env.chartId.slice('daily-'.length);
+    if (!dailyDateAcceptable(date, nowMs)) return null;
+    return dailyChart(date);
   }
   if (env.chartId?.startsWith('chase-')) {
     // chase-<seedHex>-<difficulty>
@@ -66,8 +81,11 @@ export function handleMessage(ctx, msg) {
         // ranked submissions must not carry the widen-window assist at all.
         if (env.assists?.timingAssist === 'wide') return { error: 'assist-not-permitted', rejected: true };
 
-        const chart = chartForEnvelope(env);
+        const chart = chartForEnvelope(env, typeof ctx?.now === 'function' ? ctx.now() : Date.now());
         if (!chart) return { error: 'unknown-chart' };
+        // The rebuilt chart must be exactly the one the envelope names, so a
+        // submission cannot claim a different difficulty than the one played.
+        if (chart.id !== env.chartId) return { error: 'unknown-chart' };
         if (chart.seed !== env.seed) return { error: 'seed-mismatch' };
 
         // Command sanity: bounds, ordering, types.

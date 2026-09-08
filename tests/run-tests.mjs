@@ -15,6 +15,7 @@ import {
 import {
   generateChart, validateChart, journeyChart, JOURNEY_STAGES, dailyChart,
   practiceChart, challengeChart, CHALLENGES, PRACTICE_DIFFICULTIES, LESSONS, lessonChart,
+  scoreChaseChart,
 } from '../js/content.js';
 import { makeRng, dailySeed, hashString } from '../js/rng.js';
 import {
@@ -402,9 +403,10 @@ test('stars: 0 for fail, up to 3 for clean accurate run', () => {
 
 // --- Authoritative server ---------------------------------------------------------
 console.log('\n[server]');
+const SERVER_NOW = Date.UTC(2026, 7, 18, 12, 0, 0); // fixed clock: 2026-08-18
 const serverCtx = () => {
   const store = new Map();
-  return { identity: 'tester', now: () => Date.now(), store: { get: (k) => store.get(k), set: (k, v) => store.set(k, v) } };
+  return { identity: 'tester', now: () => SERVER_NOW, store: { get: (k) => store.get(k), set: (k, v) => store.set(k, v) } };
 };
 
 test('server accepts a valid daily envelope and rejects tampering', () => {
@@ -445,6 +447,41 @@ test('server rejects a ranked envelope carrying the wide timing assist', () => {
   const r = handleMessage({ ...serverCtx(), identity: 'assist-tester' }, { kind: 'validate-score', envelope: env });
   assert.equal(r.error, 'assist-not-permitted');
   assert.equal(r.rejected, true);
+});
+
+test('server rejects a daily envelope for an out-of-window past day', () => {
+  const stale = dailyChart('2026-07-01'); // 48 days before the fixed server clock
+  const s = autoPlay(stale);
+  const env = {
+    rulesVersion: RULES_VERSION, contentVersion: stale.version, chartId: stale.id,
+    seed: stale.seed, commands: s.commandLog, terminal: { hash: hashState(s) },
+  };
+  const r = handleMessage({ ...serverCtx(), identity: 'stale-tester' }, { kind: 'validate-score', envelope: env });
+  assert.equal(r.error, 'unknown-chart');
+  // Yesterday's daily is still accepted (run finished across the UTC rollover).
+  const yesterday = dailyChart('2026-08-17');
+  const y = autoPlay(yesterday);
+  const okEnv = {
+    rulesVersion: RULES_VERSION, contentVersion: yesterday.version, chartId: yesterday.id,
+    seed: yesterday.seed, commands: y.commandLog, terminal: { hash: hashState(y) },
+  };
+  const ok = handleMessage({ ...serverCtx(), identity: 'yesterday-tester' }, { kind: 'validate-score', envelope: okEnv });
+  assert.ok(ok.ok && ok.accepted, JSON.stringify(ok));
+});
+
+test('server rejects a chase envelope whose chartId does not rebuild identically', () => {
+  const chart = scoreChaseChart(1234, 'calm');
+  const s = autoPlay(chart);
+  const env = {
+    rulesVersion: RULES_VERSION, contentVersion: chart.version, chartId: chart.id,
+    seed: chart.seed, commands: s.commandLog, terminal: { hash: hashState(s) },
+  };
+  const ok = handleMessage({ ...serverCtx(), identity: 'chase-tester' }, { kind: 'validate-score', envelope: env });
+  assert.ok(ok.ok && ok.accepted, JSON.stringify(ok));
+  // Claiming a harder difficulty than the one actually played is refused.
+  const spoofed = { ...env, chartId: `chase-${(1234).toString(16)}-relentless` };
+  const bad = handleMessage({ ...serverCtx(), identity: 'chase-spoof' }, { kind: 'validate-score', envelope: spoofed });
+  assert.ok(bad.error === 'hash-mismatch' || bad.error === 'unknown-chart', JSON.stringify(bad));
 });
 
 test('chase board tie-break uses compareResults and tolerates legacy entries', () => {

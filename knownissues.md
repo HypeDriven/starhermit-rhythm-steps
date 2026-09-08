@@ -1,5 +1,50 @@
 # Known Issues — Rhythm Steps
 
+## Review pass 2026-09-07 (Claude Opus 5)
+
+`npm test` **41/41 PASS**, `node --check` clean on all 11 modules + `server.js`,
+`npm run test:e2e` **PASS** (desktop 1280x800 + mobile 390x844, zero page errors).
+
+Fixed in this pass:
+
+1. **Restarting a track dropped its modifiers.** `restartTrack()` rebuilt the session with
+   `{ lesson: context.lesson }`, a field that is never stored on the context, so `opts.failEnabled`
+   was lost: restarting *Thin Ice* or *Unbroken* from the pause menu (or Retry from the results
+   screen) silently continued without health, and restarting a lesson lost the lesson overlay.
+   `js/main.js` now keeps `currentOpts` alongside the chart/mode/context and reuses it.
+   Covered by `tests/e2e.mjs` ("challenge restart keeps the health modifier").
+2. **Escape resumed play underneath the settings panel.** With Settings or Help opened over the
+   pause menu (z-index 50 over the pause dialog), Escape hit the `phase === 'paused'` branch and
+   resumed the run while the opaque panel still covered the playfield. The key handler now closes
+   an open overlay screen first (`ui.overlayScreenVisible()`), matching the on-screen Back button.
+   Covered by `tests/e2e.mjs` ("pause → settings overlay → back leaves the game paused").
+3. **2D fallback renderer drew at the wrong scale above 2x DPR.** `resize()` caps the backing store
+   at `dpr = min(devicePixelRatio, 2)` but `update()` recovered CSS pixels with the *uncapped*
+   `devicePixelRatio`, so on a 3x display the lanes were laid out across two thirds of the canvas.
+   The CSS size is now recorded in `resize()` and used directly.
+4. **Left-handed layout desynced the lanes from the buttons.** `body.left-handed` reverses the lane
+   button row, but both renderers kept drawing lane 0 on the left, so every touch target pointed at
+   the wrong lane. `mirrorLanes` now mirrors the drawn lanes and the pointer pick in `render2d.js`
+   and `render3d.js`, and toggling the setting rebuilds the 3D causeway.
+5. **The playfield stayed focusable and in the accessibility tree behind menus.** The lane and pause
+   buttons could be tabbed into from a menu screen or the pause dialog. `#playfield` is now `inert`
+   (plus `aria-hidden`) whenever a screen or the pause dialog covers it. Pausing also clears held
+   lanes, which the swallowed pointer/key release would otherwise leave lit.
+6. **Server accepted a daily replay from any past day** (previously logged below as *Suspected 2*).
+   `chartForEnvelope` rebuilt `daily-<date>` for any date string, so a favourable past day could be
+   farmed. Validation now accepts only the current UTC day and the previous one (a run finishing
+   across the rollover), and requires the rebuilt chart id to equal the submitted `chartId` so a
+   score-chase submission cannot claim a difficulty it did not play. Two tests added.
+7. **Smaller UI fixes.** The HUD accuracy readout no longer shows the previous run's value before
+   the first judgment; the score-chase board looks up the same normalized seed key that
+   `startChase` writes (and refreshes as the seed field changes) and tolerates entries without a
+   `score`/`grade` field; the title's journey status uses `JOURNEY_STAGES.length` instead of a
+   hard-coded 40.
+
+Also added: `LICENSE.md` (PolyForm Noncommercial 1.0.0), which the repo was missing.
+
+---
+
 QA pass 2026-08-20. Static review driven by Qwen3.8 27B on spark105 (OBLITERATED Q5_K_M),
 alongside the game's own test suite and its bundled headless-Chrome end-to-end smoke test.
 
@@ -90,7 +135,10 @@ mobile (touch), which requires a visible, correctly sized lane canvas.
   seeded chart" design described at `js/content.js:297`. Whether a *global* score-chase board
   exists depends on the host, which is not in this repository.
 
-### 2. An old `daily-<date>` chart id is accepted for validation
+### 2. An old `daily-<date>` chart id is accepted for validation — RESOLVED 2026-09-07
+
+Fixed in the review pass above: `chartForEnvelope` now rejects any daily date outside the current
+UTC day and the one before it. Original report follows.
 
 - **File:** `server.js:31-33`
 - **Concern:** `chartForEnvelope` rebuilds `dailyChart(env.chartId.slice('daily-'.length))` for any

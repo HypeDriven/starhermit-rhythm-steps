@@ -25,6 +25,7 @@ let session = null;
 let currentChart = null;
 let currentMode = null;      // 'journey' | 'daily' | 'practice' | 'challenge' | 'chase' | 'learn'
 let currentContext = {};     // { stageIndex, difficultyKey, challengeKey, seed, lessonId }
+let currentOpts = {};        // session modifiers (failEnabled, lesson) — reused on restart
 let pendingSetup = null;     // setup screen confirmation payload
 let phase = 'boot';
 let lessonState = null;
@@ -74,6 +75,9 @@ function createRenderer() {
     reducedMotion: save.settings.reducedMotion,
     cameraSway: save.settings.cameraSway,
     noteSpeed: save.settings.noteSpeed,
+    // Left-handed layout reverses the on-screen lane buttons; the rendered
+    // lanes mirror with them so column order always matches.
+    mirrorLanes: !!save.settings.leftHanded,
     quality,
     seed: currentChart ? currentChart.seed : 1,
     onLaneInput: handleLanePointer,
@@ -112,7 +116,12 @@ function applySettingsSideEffects() {
   audio.applySettings(s);
   audio.captionsEnabled = !!s.captions;
   platform.setTelemetryConsent(!!s.telemetryConsent);
+  if (renderer && renderer.is3D && !!renderer.mirrorLanes !== !!s.leftHanded) {
+    createRenderer(); // lane geometry is built once; mirroring needs a rebuild
+    renderer.resize();
+  }
   if (renderer) {
+    renderer.setMirrorLanes?.(!!s.leftHanded);
     renderer.setReducedMotion?.(!!s.reducedMotion);
     renderer.setNoteSpeed?.(s.noteSpeed || 1);
     renderer.setQuality?.(resolveQualityTier());
@@ -267,10 +276,12 @@ const controller = {
 
   restartTrack() {
     if (!currentChart) return;
-    const chart = currentChart, mode = currentMode, context = { ...currentContext };
+    // Restarts must reproduce the run exactly: challenge modifiers (health) and
+    // the active lesson are carried over, not silently dropped.
+    const chart = currentChart, mode = currentMode, context = { ...currentContext }, opts = { ...currentOpts };
     ui.showPause(false);
     teardownSession();
-    beginSession(chart, mode, context, { lesson: context.lesson });
+    beginSession(chart, mode, context, opts);
     platform.telemetry('retry');
   },
 
@@ -317,6 +328,7 @@ function beginSession(chart, mode, context, opts = {}) {
   currentChart = chart;
   currentMode = mode;
   currentContext = context;
+  currentOpts = opts;
   phase = 'preparing';
 
   createRenderer(); // reseed environment per chart
@@ -628,6 +640,9 @@ function bindGlobalInput() {
 
     // Pause / cancel.
     if (key === (save.settings.pauseKey || 'escape') || key === 'escape') {
+      // Settings/help opened over the pause menu close first — Escape must not
+      // resume play while a panel is still covering the playfield.
+      if (ui.overlayScreenVisible()) { ui.navBack(); e.preventDefault(); return; }
       if (phase === 'active') { pauseGame(); e.preventDefault(); return; }
       if (phase === 'paused') { resumeGame(); e.preventDefault(); return; }
       if (phase === 'countdown') { controller.leaveGame(); e.preventDefault(); return; }
@@ -662,6 +677,10 @@ function pauseGame() {
   if (!session || phase !== 'active') return;
   phase = 'paused';
   session.pause();
+  // Drop input state: the pause dialog swallows the pointer/key release that
+  // would otherwise clear it, which would leave lanes stuck lit.
+  for (const lane of [...heldLanes]) { heldLanes.delete(lane); renderer?.pressLane(lane, false); ui.laneButtonState(lane, false); }
+  pressedKeys.clear();
   audio.stopMusic(); // solo simulation pauses; music restarts on resume at song position
   ui.showPause(true);
   ui.announce('Paused');

@@ -67,10 +67,14 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
   // buttons on mobile. Holds are held down for their duration on desktop;
   // on mobile a tap registers the head (release is early but legitimate play).
   const hitNote = async (note, waited) => {
-    const wait = note.time - waited - 40; // 40ms lead for roundtrip latency
+    // Measure the live clock after locating the target; locator actionability
+    // and previous input round trips must not accumulate into timing drift.
+    const box = hasTouch ? await page.locator(`.lane-btn[data-lane="${note.lane}"]`).boundingBox() : null;
+    if (hasTouch && !box) throw new Error('lane button is not visible');
+    const wait = note.time - await songNow() - 40;
     if (wait > 0) await page.waitForTimeout(wait);
     if (hasTouch) {
-      await page.locator(`.lane-btn[data-lane="${note.lane}"]`).tap();
+      await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
     } else {
       const key = LANE_KEYS[note.lane];
       await page.keyboard.down(key);
@@ -148,6 +152,22 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
       await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active');
     });
 
+    await step('pause → settings overlay → back leaves the game paused', async () => {
+      if (hasTouch) await page.locator('#btn-pause').tap();
+      else await page.keyboard.press('Escape');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      await page.click('#btn-pause-settings');
+      await page.waitForSelector('#screen-settings:not(.hidden)');
+      // Escape (or Back) must close the panel only — never resume underneath it.
+      if (hasTouch) await page.click('#screen-settings [data-nav="back"]');
+      else await page.keyboard.press('Escape');
+      await page.waitForSelector('#screen-settings', { state: 'hidden' });
+      if (await phase() !== 'paused') throw new Error('game resumed while the settings panel was closing');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      await page.click('#btn-resume');
+      await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active');
+    });
+
     await step('play to natural completion → results screen', async () => {
       // Keep hitting remaining notes through the UI until the track ends.
       const deadline = await page.evaluate(() => window.RhythmSteps.getChart().durationMs + 12000);
@@ -212,6 +232,30 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
       await page.click('#btn-setup-start');
       await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active', null, { timeout: 10000 });
       await page.screenshot({ path: SHOT('practice', tag) });
+      if (hasTouch) await page.locator('#btn-pause').tap();
+      else await page.keyboard.press('Escape');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      await page.click('#btn-leave');
+      await page.waitForSelector('#screen-title:not(.hidden)');
+    });
+
+    await step('challenge restart keeps the health modifier', async () => {
+      await page.click('[data-mode="challenge"]');
+      await page.waitForSelector('#screen-challenge:not(.hidden)');
+      await page.locator('#challenge-list .btn').nth(2).click(); // Thin Ice (failEnabled)
+      await page.waitForSelector('#screen-setup:not(.hidden)');
+      await page.click('#btn-setup-start');
+      await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active', null, { timeout: 10000 });
+      const failOn = () => page.evaluate(() => !!window.RhythmSteps.getSession()?.state.failEnabled);
+      if (!(await failOn())) throw new Error('challenge did not start with health enabled');
+      if (hasTouch) await page.locator('#btn-pause').tap();
+      else await page.keyboard.press('Escape');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      await page.click('#btn-pause-restart');
+      await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active', null, { timeout: 12000 });
+      if (!(await failOn())) throw new Error('restart dropped the challenge health modifier');
+      // The HUD refreshes on a 120ms cadence, so wait for the readout to appear.
+      await page.waitForSelector('#hud-health:not(.hidden)', { timeout: 3000 });
       if (hasTouch) await page.locator('#btn-pause').tap();
       else await page.keyboard.press('Escape');
       await page.waitForSelector('#overlay-pause:not(.hidden)');

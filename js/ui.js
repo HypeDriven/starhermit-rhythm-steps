@@ -48,7 +48,10 @@ export function initUI(controller) {
   });
   $('btn-chase-random').addEventListener('click', () => {
     $('chase-seed').value = String(Math.floor(Math.random() * 1e9));
+    renderChaseBoard();
   });
+  // The local board always reflects the seed currently in the field.
+  $('chase-seed').addEventListener('input', () => renderChaseBoard());
   $('btn-replay-tutorial').addEventListener('click', () => ctl.openMode('learn'));
   $('btn-reset-save').addEventListener('click', () => {
     if (confirm('Reset ALL local progress, settings, and achievements?')) ctl.resetSave();
@@ -68,7 +71,10 @@ export function showScreen(name, { overlay = false } = {}) {
   if (!overlay) {
     for (const s of SCREENS) $(`screen-${s}`).classList.toggle('hidden', s !== name);
     // The playfield/canvas stays laid out as the backdrop behind the opaque
-    // screens (z-index 10) so the renderer keeps a real viewport size.
+    // screens (z-index 10) so the renderer keeps a real viewport size. It is
+    // made inert so its lane/pause buttons stay out of the tab order and out of
+    // the accessibility tree while a menu covers them.
+    setPlayfieldInert(true);
     hidePause();
     navStack = navStack.filter((n) => n !== name);
     navStack.push(name);
@@ -90,9 +96,16 @@ export function showScreen(name, { overlay = false } = {}) {
   if (name === 'title') renderTitle();
 }
 
+function findOverlayScreen() {
+  return SCREENS.map((s) => $(`screen-${s}`)).find((el) => el.style.zIndex === '50' && !el.classList.contains('hidden'));
+}
+
+// True when settings/help is stacked over the pause menu.
+export function overlayScreenVisible() { return !!findOverlayScreen(); }
+
 export function navBack() {
   // Close an overlay screen (settings/help opened over pause) first.
-  const overlayScreen = SCREENS.map((s) => $(`screen-${s}`)).find((el) => el.style.zIndex === '50' && !el.classList.contains('hidden'));
+  const overlayScreen = findOverlayScreen();
   if (overlayScreen) {
     overlayScreen.classList.add('hidden');
     overlayScreen.style.zIndex = '';
@@ -101,6 +114,7 @@ export function navBack() {
   }
   const current = navStack.pop();
   const prev = navStack[navStack.length - 1] || 'title';
+  setPlayfieldInert(true);
   for (const s of SCREENS) {
     const el = $(`screen-${s}`);
     el.classList.toggle('hidden', s !== prev);
@@ -112,9 +126,17 @@ export function navBack() {
   return current;
 }
 
+function setPlayfieldInert(inert) {
+  const pf = $('playfield');
+  if (!pf) return;
+  pf.inert = inert;
+  pf.setAttribute('aria-hidden', inert ? 'true' : 'false');
+}
+
 export function showPlayfield() {
   for (const s of SCREENS) $(`screen-${s}`).classList.add('hidden');
   $('playfield').classList.remove('hidden');
+  setPlayfieldInert(false);
   navStack = [];
 }
 
@@ -127,8 +149,9 @@ export function anyScreenVisible() {
 // ---------------------------------------------------------------------------
 function renderTitle() {
   const save = ctl.getSave();
+  const total = JOURNEY_STAGES.length;
   const unlocked = save.journey.unlocked;
-  $('title-journey-status').textContent = `Stage ${Math.min(unlocked, 40)}/40`;
+  $('title-journey-status').textContent = `Stage ${Math.min(unlocked, total)}/${total}`;
   const today = ctl.utcToday();
   $('title-daily-status').textContent = save.daily.history[today] ? `Done — ${save.daily.history[today].grade}` : 'Not played';
   $('compat-note').classList.toggle('hidden', !ctl.usingFallbackRenderer());
@@ -217,7 +240,10 @@ export function renderChaseBoard(chartId = null) {
   const save = ctl.getSave();
   const board = $('chase-board');
   board.innerHTML = '';
-  const id = chartId || $('chase-seed').value;
+  // Boards are keyed by the normalized seed that startChase actually used, so
+  // look up the same normalization rather than the raw field text.
+  const typed = parseInt($('chase-seed').value, 10);
+  const id = chartId || (Number.isFinite(typed) ? String(typed >>> 0) : $('chase-seed').value);
   const entries = (save.chaseBoards[id] || []).slice().sort((a, b) => compareResults(chaseEntry(a), chaseEntry(b))).slice(0, 10);
   if (!entries.length) {
     board.innerHTML = '<li class="muted">No local scores for this seed yet.</li>';
@@ -225,7 +251,8 @@ export function renderChaseBoard(chartId = null) {
   }
   for (const e of entries) {
     const li = document.createElement('li');
-    li.textContent = `${e.name} — ${e.score.toLocaleString()} (${e.grade})`;
+    const score = e.total ?? e.score ?? 0;
+    li.textContent = `${e.name || 'Guest'} — ${score.toLocaleString()} (${e.grade || '—'})`;
     board.appendChild(li);
   }
 }
@@ -280,6 +307,8 @@ export function updateHud(snap) {
   if (total > 0) {
     const acc = (snap.counts.perfect + snap.counts.great * 0.7 + snap.counts.good * 0.4) / total;
     $('hud-acc').textContent = `${(acc * 100).toFixed(1)}%`;
+  } else {
+    $('hud-acc').textContent = ''; // nothing judged yet — never show the last run's accuracy
   }
   $('hud-progress-fill').style.width = `${Math.min(100, (snap.tick / snap.durationMs) * 100)}%`;
   const healthEl = $('hud-health');
@@ -323,6 +352,8 @@ export function hideLesson() { $('lesson-overlay').classList.add('hidden'); }
 
 export function showPause(show) {
   $('overlay-pause').classList.toggle('hidden', !show);
+  // The pause dialog is modal: keep focus out of the playfield behind it.
+  setPlayfieldInert(show);
   if (show) { lastFocused = document.activeElement; $('btn-resume').focus(); }
   else if (lastFocused?.focus) lastFocused.focus();
 }

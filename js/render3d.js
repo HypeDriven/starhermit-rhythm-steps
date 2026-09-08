@@ -32,6 +32,7 @@ export class Renderer3D {
     this.cameraSway = options.cameraSway !== false;
     this.noteSpeed = options.noteSpeed || 1;
     this.quality = options.quality || 'high';
+    this.mirrorLanes = !!options.mirrorLanes;
     this.onLaneInput = options.onLaneInput || (() => {});
     this._rng = makeRng(streamSeed(options.seed || 1, 'visual'));
     this._time = 0;
@@ -45,6 +46,11 @@ export class Renderer3D {
     this._buildScene();
     this._bindPointer();
   }
+
+  // World X for a logical lane. The left-handed layout mirrors the causeway so
+  // the rendered lanes keep matching the on-screen lane button order.
+  _laneX(lane) { return laneX(this.mirrorLanes ? LANES - 1 - lane : lane); }
+  setMirrorLanes(v) { this.mirrorLanes = !!v; }
 
   // -------------------------------------------------------------------------
   _buildRenderer() {
@@ -98,7 +104,7 @@ export class Renderer3D {
         emissive: t.laneEdge, emissiveIntensity: 0.06,
       });
       const m = new THREE.Mesh(laneGeo, mat);
-      m.position.set(laneX(i), 0, -TRACK_LEN / 2 + 4);
+      m.position.set(this._laneX(i), 0, -TRACK_LEN / 2 + 4);
       m.receiveShadow = true;
       m.userData.lane = i;
       this.laneGroup.add(m);
@@ -130,7 +136,7 @@ export class Renderer3D {
         emissive: this.cvd ? this.options.cvdColors.receptor : t.receptor, emissiveIntensity: 0.7,
       });
       const r = new THREE.Mesh(recGeo, mat);
-      r.position.set(laneX(i), 0.1, RECEPTOR_Z);
+      r.position.set(this._laneX(i), 0.1, RECEPTOR_Z);
       this.scene.add(r);
       this.receptors.push(r);
     }
@@ -323,8 +329,9 @@ export class Renderer3D {
     const hits = this._raycaster.intersectObject(this.pickPlane, false);
     if (!hits.length) return null;
     const x = hits[0].point.x;
-    const lane = Math.round(x / LANE_W + (LANES - 1) / 2);
-    return lane >= 0 && lane < LANES ? lane : null;
+    const col = Math.round(x / LANE_W + (LANES - 1) / 2);
+    if (!(col >= 0 && col < LANES)) return null;
+    return this.mirrorLanes ? LANES - 1 - col : col;
   }
 
   pressLane(lane, held) { // external (keyboard/gamepad/DOM buttons) visual ack
@@ -357,7 +364,7 @@ export class Renderer3D {
     p.age = 0;
     p.strength = strength;
     p.mesh.visible = true;
-    p.mesh.position.set(laneX(lane), 0.14, RECEPTOR_Z);
+    p.mesh.position.set(this._laneX(lane), 0.14, RECEPTOR_Z);
     p.mat.color.set(color);
     p.mat.opacity = 0.85;
   }
@@ -384,7 +391,7 @@ export class Renderer3D {
           usedNotes.add(p);
           const z = n.state === 'pending' ? -(timeUntil / leadMs) * TRACK_LEN : RECEPTOR_Z;
           p.mesh.visible = true;
-          p.mesh.position.set(laneX(n.lane), NOTE_Y + 0.3, Math.min(z, RECEPTOR_Z));
+          p.mesh.position.set(this._laneX(n.lane), NOTE_Y + 0.3, Math.min(z, RECEPTOR_Z));
           const s = n.state === 'holding' ? 0.7 : 1;
           p.mesh.scale.setScalar(s);
           if (!this.reducedMotion) p.mesh.rotation.y = this._time * 2 + n.id;
@@ -401,7 +408,7 @@ export class Renderer3D {
           const len = Math.max(0.3, clampedHead - tailZ);
           h.mesh.visible = true;
           h.mesh.scale.set(1, 1, len);
-          h.mesh.position.set(laneX(n.lane), NOTE_Y + 0.15, (clampedHead + tailZ) / 2);
+          h.mesh.position.set(this._laneX(n.lane), NOTE_Y + 0.15, (clampedHead + tailZ) / 2);
           h.mat.emissiveIntensity = n.state === 'holding' ? 1.9 : 1.2;
         }
       }
@@ -480,6 +487,8 @@ export class Renderer3D {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
   }
+
+  get is3D() { return true; }
 
   hide() { if (this.renderer) this.renderer.domElement.style.visibility = 'hidden'; }
   show() { if (this.renderer) this.renderer.domElement.style.visibility = 'visible'; }
