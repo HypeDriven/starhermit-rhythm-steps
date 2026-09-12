@@ -294,13 +294,14 @@ legend { color: var(--accent); padding: 0 6px; }
 
 /* Landscape mobile: narrow status rail, 44px targets with 8px separation. */
 @media (max-height: 500px) and (orientation: landscape) {
-  #lane-buttons { flex-direction: column; width: 88px; left: auto; right: calc(4px + var(--safe-right)); top: calc(44px + var(--safe-top)); bottom: calc(4px + var(--safe-bottom)); padding: 0; gap: 8px; }
-  .lane-btn { min-height: 44px; min-width: 44px; flex: 1 1 44px; }
-  .lane-btn .lane-key { display: none; }
-  #hud-score-row { top: calc(48px + var(--safe-top)); right: calc(100px + var(--safe-right)); }
+  /* lane buttons stay a horizontal row under the runway (one per lane, left
+     to right, labelled) — a compact 44px strip instead of an unlabeled column */
+  #lane-buttons { left: 50%; right: auto; transform: translateX(-50%); bottom: 0; top: auto; width: min(62vw, 560px); flex-direction: row; gap: 8px; padding: 4px 0 calc(4px + var(--safe-bottom)); }
+  .lane-btn { min-height: 44px; flex: 1; }
+  .lane-btn .lane-key { display: inline; font-size: 0.95rem; }
+  #hud-score-row { top: calc(48px + var(--safe-top)); }
   #hud-score { font-size: 1.1rem; }
-  #hud-top { right: calc(100px + var(--safe-right)); }
-  #caption-line { bottom: calc(8px + var(--safe-bottom)); }
+  #caption-line { bottom: calc(56px + var(--safe-bottom)); }
 }
 
 /* ============ Accessibility modes ============ */
