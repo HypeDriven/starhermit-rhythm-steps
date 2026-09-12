@@ -9,7 +9,7 @@ import * as ui from './ui.js';
 import * as platform from './platform.js';
 import {
   loadSave, writeSave, defaultSave, unlockAchievement, awardMasteryXp,
-  starsForResult, markPlayedToday, ACHIEVEMENTS,
+  starsForResult, markPlayedToday, ACHIEVEMENTS, parseSaveDoc,
 } from './persistence.js';
 import {
   journeyChart, JOURNEY_STAGES, dailyChart, practiceChart, challengeChart,
@@ -40,12 +40,22 @@ let gamepadNavCooldown = 0;
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+// Persist locally and mirror to the hosted cloud-save slot (debounced; the
+// flush happens on pagehide/visibilitychange inside the platform adapter).
+function persistSave() {
+  writeSave(save);
+  platform.scheduleCloudPush(save);
+}
+
 function boot() {
   save = loadSave();
   applySettingsSideEffects();
   platform.detectHost();
   platform.setTelemetryConsent(!!save.settings.telemetryConsent);
+  platform.setSyncStatusHandler(ui.setSyncStatus);
   platform.syncTime().then(() => renderTitleStatuses());
+  initHostedProfile();
+  initCloudSave();
   createRenderer();
 
   ui.initUI(controller);
@@ -57,10 +67,45 @@ function boot() {
   phase = 'title';
   ui.showScreen('title');
   renderer.resize(); // size the playfield canvas to the viewport from boot
-  platform.startActivity();
-  window.addEventListener('beforeunload', () => { platform.endActivity(); writeSave(save); });
+  window.addEventListener('beforeunload', () => { writeSave(save); platform.flushCloud(); });
   requestAnimationFrame(frame);
   platform.telemetry('start', { hosted: platform.isHosted() });
+}
+
+// Hosted identity: the account nickname from the platform profile replaces
+// the local guest name (read-only in the UI); "Player "+id8 fallback lives
+// in the platform adapter.
+function initHostedProfile() {
+  if (!platform.isHosted()) return;
+  platform.loadProfile().then((name) => {
+    if (!name) return;
+    save.profile.displayName = name;
+    save.profile.accountLinked = true;
+    save.profile.guest = false;
+    persistSave();
+  });
+}
+
+// Hosted cloud mirror: the remote doc wins when it is at least as new as the
+// local cache; a newer local doc (offline play since the last sync) is
+// pushed back up. localStorage remains the offline cache throughout.
+function initCloudSave() {
+  if (!platform.isHosted()) return;
+  platform.cloudLoad().then((r) => {
+    if (!r.ok || !r.doc) return;
+    const remote = parseSaveDoc(r.doc);
+    if (!remote) return;
+    if ((remote.updatedAt || 0) < (save.updatedAt || 0)) {
+      platform.scheduleCloudPush(save);
+      return;
+    }
+    save = remote;
+    persistSave();
+    applySettingsSideEffects();
+    ui.refreshSettingsPanel();
+    ui.setLaneKeyLabels(save.settings.keys);
+    renderTitleStatuses();
+  });
 }
 
 function createRenderer() {
@@ -143,7 +188,7 @@ const controller = {
     applySettingsSideEffects();
     ui.setLaneKeyLabels(save.settings.keys);
     ui.refreshHelpCards();
-    writeSave(save);
+    persistSave();
     platform.telemetry('settings-change');
   },
 
@@ -152,20 +197,21 @@ const controller = {
     const existing = save.settings.keys.indexOf(key);
     if (existing >= 0 && existing !== lane) save.settings.keys[existing] = save.settings.keys[lane];
     save.settings.keys[lane] = key;
-    writeSave(save);
+    persistSave();
     ui.setLaneKeyLabels(save.settings.keys);
     ui.refreshHelpCards();
   },
 
   updateProfile({ displayName }) {
+    if (save.profile.accountLinked) { ui.toast('Name comes from your StarHermit account'); return; }
     save.profile.displayName = displayName;
-    writeSave(save);
+    persistSave();
     ui.toast('Profile updated');
   },
 
   resetSave() {
     save = defaultSave();
-    writeSave(save);
+    persistSave();
     applySettingsSideEffects();
     ui.refreshSettingsPanel();
     ui.setLaneKeyLabels(save.settings.keys);
@@ -216,10 +262,10 @@ const controller = {
     pendingSetup = { chart, mode: 'daily', context: { date: today }, opts: {} };
     ui.showSetup({
       title: `Daily — ${today}`,
-      description: 'One shared seed and ruleset for everyone, per UTC day. Your best run is ranked.',
-      rules: setupRules(chart, 'Ranked submission includes the replay for validation.'),
+      description: 'One shared seed and ruleset for everyone, per UTC day. Your best score is recorded and cloud-synced.',
+      rules: setupRules(chart, 'The platform board is read-only; your personal best is kept in your save.'),
       durationMs: chart.durationMs,
-      ranked: true,
+      ranked: false,
       assists: assistSummary(true),
     });
   },
@@ -258,9 +304,9 @@ const controller = {
     ui.showSetup({
       title: chart.displayName,
       description: `Seed ${seed}. Anyone with this seed plays the identical chart.`,
-      rules: setupRules(chart, 'Scores for this seed appear on the shared board.'),
+      rules: setupRules(chart, 'Scores for this seed stay on your local and cloud-saved board.'),
       durationMs: chart.durationMs,
-      ranked: true,
+      ranked: false,
       assists: assistSummary(true),
     });
   },
@@ -317,7 +363,7 @@ function setupRules(chart, extra) {
 
 function assistSummary(rankedMode = false) {
   const a = save.settings.timingAssist;
-  if (a === 'wide') return rankedMode ? 'Wide timing windows (submission labeled assisted)' : 'Wide timing windows';
+  if (a === 'wide') return 'Wide timing windows (kept off competitive boards)';
   return 'None';
 }
 
@@ -371,7 +417,6 @@ function beginSession(chart, mode, context, opts = {}) {
       audio.startMusic(chart);
       session.start();
       phase = 'active';
-      platform.startHeartbeat();
       platform.telemetry('start', { mode: 1 });
     }
   }, 600);
@@ -396,7 +441,6 @@ function teardownSession() {
   lessonState = null;
   audio.stopMusic();
   audio.stopAmbience();
-  platform.stopHeartbeat();
   ui.hideLesson();
   ui.countdown(null);
   ui.showPause(false);
@@ -407,7 +451,7 @@ function teardownSession() {
 // Session events → audio / renderer / UI
 // ---------------------------------------------------------------------------
 function handleSessionEvent(evt) {
-  if (evt.type === 'terminal') { onTerminal(evt.breakdown, evt.envelope); return; }
+  if (evt.type === 'terminal') { onTerminal(evt.breakdown); return; }
   renderer?.event(evt);
   switch (evt.type) {
     case 'hit':
@@ -472,7 +516,7 @@ function lessonProgress(action) {
     if (lessonState.stepIndex >= lesson.steps.length) {
       ui.lessonStep('Lesson complete! Finish the track.', '');
       save.lessons[lesson.id] = true;
-      writeSave(save);
+      persistSave();
       setTimeout(() => ui.hideLesson(), 2200);
       lessonState = null;
       return;
@@ -486,18 +530,18 @@ function lessonProgress(action) {
 // ---------------------------------------------------------------------------
 // Terminal → results → progression
 // ---------------------------------------------------------------------------
-function onTerminal(breakdown, envelope) {
+function onTerminal(breakdown) {
   phase = 'results';
-  platform.stopHeartbeat();
   audio.playResultFanfare(breakdown.grade);
   platform.telemetry('round-end', { score: breakdown.total, completed: breakdown.terminalReason === 'complete' });
 
   const completed = breakdown.terminalReason === 'complete';
   const unlockedAch = [];
   const tryUnlock = (key) => {
+    // Achievements are local (part of the cloud-saved doc) — a pure browser
+    // game has no server-authoritative unlock path.
     if (unlockAchievement(save, key)) {
       unlockedAch.push(ACHIEVEMENTS.find((a) => a.key === key));
-      platform.deliverAchievement(key);
     }
   };
 
@@ -546,21 +590,14 @@ function onTerminal(breakdown, envelope) {
       save.daily.history[date] = { score: breakdown.total, grade: breakdown.grade };
     }
     headline = completed ? 'Daily run complete' : 'Daily run ended';
-    detail = 'Your replay was recorded for validation.';
-    if (completed && breakdown.total > 0 && save.settings.timingAssist !== 'wide') {
-      platform.submitScore(envelope).then((r) => {
-        if (r.ok) ui.toast('Daily score submitted');
-        else if (r.error !== 'not-hosted') ui.toast(`Submission: ${r.error}`);
-      });
-    }
+    detail = 'Personal best recorded in your save.';
   } else if (currentMode === 'chase') {
     const key = `${currentContext.seed}`;
     const board = save.chaseBoards[key] || (save.chaseBoards[key] = []);
     board.push({ name: save.profile.displayName, score: breakdown.total, total: breakdown.total, grade: breakdown.grade, sessionId: breakdown.sessionId, terminalReason: breakdown.terminalReason, invalidActions: breakdown.invalidActions, elapsedMs: breakdown.elapsedMs });
     board.sort((a, b) => compareResults(chaseEntry(a), chaseEntry(b)));
     save.chaseBoards[key] = board.slice(0, 20);
-    headline = completed ? 'Score posted to the seed board' : 'Run ended';
-    if (completed && save.settings.timingAssist !== 'wide') platform.submitScore(envelope);
+    headline = completed ? 'Score posted to your seed board' : 'Run ended';
   } else if (currentMode === 'challenge') {
     const goalMet = completed &&
       breakdown.accuracy >= (currentChart.goals?.minAccuracy || 0) &&
@@ -576,8 +613,7 @@ function onTerminal(breakdown, envelope) {
     save.lessons[currentContext.lessonId] = true;
   }
 
-  writeSave(save);
-  platform.cloudPush(JSON.parse(JSON.stringify(save))); // fire-and-forget; conflicts handled on pull
+  persistSave();
   ui.showResults(breakdown, { headline, canNext, achievements: unlockedAch, xpText, detail });
   session = null;
 }

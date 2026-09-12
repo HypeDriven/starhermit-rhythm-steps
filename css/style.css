@@ -242,6 +242,7 @@ legend { color: var(--accent); padding: 0 6px; }
 
 /* Profile */
 .profile-head { display: flex; align-items: center; gap: 16px; }
+.profile-head > div { flex: 1; }
 .profile-head .field { flex: 1; }
 #profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: hsl(200, 70%, 55%); flex: none; }
 .ach-list { list-style: none; padding: 0; }

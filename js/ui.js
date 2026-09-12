@@ -4,7 +4,7 @@
 
 import { JOURNEY_STAGES, CHALLENGES, PRACTICE_DIFFICULTIES, THEMES, LESSONS, dailyInfo } from './content.js';
 import { ACHIEVEMENTS } from './persistence.js';
-import { isHosted } from './platform.js';
+import { isHosted, fetchGameInfo, fetchLeaderboard } from './platform.js';
 import { compareResults, chaseEntry } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
@@ -234,6 +234,31 @@ function renderChase() {
   }
   $('chase-hosted-note').classList.toggle('hidden', false);
   renderChaseBoard();
+  renderGlobalBoard();
+}
+
+// Platform boards are read-only: entries come from the game info's
+// leaderboardId, with userIds resolved to nicknames. Hidden entirely when
+// there is no hosted board.
+async function renderGlobalBoard() {
+  const head = $('chase-global-h');
+  const list = $('chase-global-board');
+  head.classList.add('hidden');
+  list.classList.add('hidden');
+  list.innerHTML = '';
+  if (!isHosted()) return;
+  const info = await fetchGameInfo();
+  const boardId = info.ok && info.data && info.data.leaderboardId;
+  if (!boardId) return;
+  const r = await fetchLeaderboard(boardId, { page: 1, pageSize: 10 });
+  if (!r.ok || !r.entries.length) return;
+  head.classList.remove('hidden');
+  list.classList.remove('hidden');
+  r.entries.forEach((e, i) => {
+    const li = document.createElement('li');
+    li.textContent = `${e.rank != null ? e.rank : i + 1}. ${e.name} — ${e.score.toLocaleString()}`;
+    list.appendChild(li);
+  });
 }
 
 export function renderChaseBoard(chartId = null) {
@@ -259,7 +284,13 @@ export function renderChaseBoard(chartId = null) {
 
 function renderProfile() {
   const save = ctl.getSave();
+  const linked = !!save.profile.accountLinked;
   $('profile-name').value = save.profile.displayName;
+  $('profile-name').disabled = linked;
+  $('profile-name-note').textContent = linked
+    ? 'Name comes from your StarHermit account.'
+    : 'Local guest name, shown only on this device.';
+  $('profile-sync').textContent = isHosted() ? 'Connecting…' : 'Local save only';
   $('profile-avatar').style.background = `hsl(${save.profile.avatarHue}, 70%, 55%)`;
   $('profile-mastery').textContent = `Level ${save.mastery.level} (${save.mastery.xp} XP)`;
   $('profile-sessions').textContent = String(save.stats.sessionsPlayed);
@@ -493,6 +524,20 @@ export function refreshHelpCards() { buildHelpCards(); }
 // ---------------------------------------------------------------------------
 // Toasts + announcements
 // ---------------------------------------------------------------------------
+const SYNC_TEXT = {
+  connecting: 'Connecting…',
+  saving: 'Saving…',
+  synced: 'Synced',
+  offline: 'Offline — local save',
+  error: 'Sync error — will retry',
+};
+
+// Cloud mirror status, surfaced on the profile screen.
+export function setSyncStatus(status) {
+  const el = $('profile-sync');
+  if (el) el.textContent = SYNC_TEXT[status] || String(status);
+}
+
 export function toast(msg, ms = 2600) {
   const el = document.createElement('div');
   el.className = 'toast';

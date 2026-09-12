@@ -147,7 +147,9 @@
       </div>
       <h3>Local board</h3>
       <ol id="chase-board" class="board"></ol>
-      <p id="chase-hosted-note" class="muted hidden">Hosted boards validate replays server-side. Local boards are casual.</p>
+      <h3 id="chase-global-h" class="hidden">Platform board <small class="muted">(read-only)</small></h3>
+      <ol id="chase-global-board" class="board hidden"></ol>
+      <p id="chase-hosted-note" class="muted hidden">On-platform boards are read-only. Local and cloud-saved boards are casual.</p>
       <div class="row"><button class="btn btn-ghost" data-nav="title">Back</button></div>
     </div>
   </section>
@@ -249,13 +251,17 @@
       <h2 id="profile-h">Profile</h2>
       <div class="profile-head">
         <div id="profile-avatar" aria-hidden="true"></div>
-        <label class="field">Display name <input id="profile-name" maxlength="24"></label>
+        <div>
+          <label class="field">Display name <input id="profile-name" maxlength="24"></label>
+          <p id="profile-name-note" class="muted"></p>
+        </div>
       </div>
       <dl class="setup-meta">
         <div><dt>Mastery level</dt><dd id="profile-mastery"></dd></div>
         <div><dt>Sessions</dt><dd id="profile-sessions"></dd></div>
         <div><dt>Best combo</dt><dd id="profile-combo"></dd></div>
         <div><dt>Days played</dt><dd id="profile-days"></dd></div>
+        <div><dt>Cloud sync</dt><dd id="profile-sync"></dd></div>
       </dl>
       <h3>Achievements</h3>
       <ul id="profile-achievements" class="ach-list"></ul>

@@ -33,7 +33,8 @@ export const DEFAULT_SETTINGS = {
 export function defaultSave() {
   return {
     version: SAVE_VERSION,
-    profile: { displayName: 'Guest', avatarHue: 200, guest: true },
+    updatedAt: 0, // last local write time (ms) — cloud conflict ordering
+    profile: { displayName: 'Guest', avatarHue: 200, guest: true, accountLinked: false },
     settings: { ...DEFAULT_SETTINGS },
     journey: { unlocked: 1, stars: {}, bestScores: {} }, // stars: stageIndex -> 0..3
     daily: { lastPlayed: null, history: {} },             // date -> {score, grade}
@@ -62,6 +63,23 @@ function migrate(doc) {
   return doc;
 }
 
+// Validate an arbitrary save document (object or JSON string): migrate, then
+// require the current version and a matching checksum. Returns the ready doc
+// or null. Shared by the localStorage loader and the cloud-save mirror.
+export function parseSaveDoc(raw) {
+  try {
+    const doc = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (typeof doc !== 'object' || doc === null) return null;
+    const migrated = migrate(doc);
+    if (migrated.version !== SAVE_VERSION) return null;
+    if (checksum(migrated) !== migrated.checksum) return null;
+    migrated.settings = { ...DEFAULT_SETTINGS, ...migrated.settings };
+    return migrated;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function loadSave(storage = globalThis.localStorage) {
   try {
     const raw = storage?.getItem(STORAGE_KEY);
@@ -84,6 +102,7 @@ export function loadSave(storage = globalThis.localStorage) {
 
 export function writeSave(doc, storage = globalThis.localStorage) {
   try {
+    doc.updatedAt = Date.now();
     doc.checksum = checksum(doc);
     storage?.setItem(STORAGE_KEY, JSON.stringify(doc));
     return true;
