@@ -152,6 +152,12 @@ Follow the skill pack's acceptance gate: deterministic seeds, debug views for co
 - Avoid runtime shader compilation during active play by prewarming required variants. Avoid per-frame allocations in simulation/render loops.
 - Quality tiers independently control shadows, environment detail, particles, post effects, antialiasing, and render scale; they never alter rules or visibility of hazards.
 
+### Graphics
+
+**Graphics.** The causeway is lit by a near-overhead key light (PCF soft shadows from a shadow box fitted to the lanes around the judgment line, so gems and receptors cast onto the causeway), a hemisphere fill and a low cool rim light from the horizon; output is sRGB with ACES filmic tone mapping. A prefiltered `RoomEnvironment` (PMREM) supplies image-based reflections to the PBR materials: clear-coated glossy note gems and receptors, satin hold bars, and metallic lanes with a procedural brushed-glass texture whose beat rungs flow toward the player at exactly the note speed. The scene adds a gradient sky dome with a horizon glow that swells on the beat and a slow aurora shimmer, a fogged neon floor grid, glowing pylon caps that pulse on the beat, drifting light motes and pooled hit sparks coloured by judgment grade. Lane edges, the judgment line, arches and gems carry HDR values so bloom (threshold 0.9) picks up only light sources and highlights; a colour grade (gentle S-curve, saturation, vignette), GTAO contact darkening and FXAA/SMAA/MSAA complete the post chain. The title screen lets the live causeway show through behind the menu panel. Reduced motion (the game setting or `prefers-reduced-motion`) freezes the ambient motion and drops sparks without changing gameplay timing. The Settings panel's **Graphics** section offers a quality preset (Auto, chosen from the detected GPU, where software renderers get Low and touch devices are capped at Balanced; Low; Balanced; High; Ultra), a render scale (50–200% of the preset's), a per-effect override for shadows, ambient occlusion, bloom, colour grade, anti-aliasing, particles, background motion and scene detail ("From preset (…)" by default; choosing a preset clears overrides), adaptive resolution (steps the resolution down to 60% when frames are slow and back up when fast) and a frame-rate readout, plus a summary line with the GPU name, cost and pixel size. Pixel ratio is capped per preset (Low 1, Balanced 1.5, High/Ultra 2); Low renders without a post chain and costs no more than the original renderer. Changes apply immediately without a reload, are saved with the other settings (and cloud-synced), and the panel's strings are localized (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT). If post-processing cannot be built, the game renders without it and the panel says so.
+
+Files: `js/gfx.js` (pure quality model: presets, categories, `detectPreset`, `resolve`, `presetTier`, `choosePreset`, `describe`), `js/gfx-ui.js` (Graphics section controls), `js/gfx-i18n.js` (panel strings), `js/render3d.js` (`setGraphics`, `graphicsInfo`, post chain, adaptive resolution), `js/vendor/three/addons/` (three.js r160 post-processing passes, shaders and `RoomEnvironment`, matching the vendored core; mapped by the import map in `index.html`).
+
 ## 5. Technical architecture
 
 ### Client modules
@@ -159,7 +165,7 @@ Follow the skill pack's acceptance gate: deterministic seeds, debug views for co
 - `bootstrap`: host handshake, capability detection, asset manifest, lifecycle.
 - `rules`: pure deterministic state transitions, legality, scoring, seeded random stream.
 - `session`: local or hosted commands, snapshots, prediction policy, reconnect, replay.
-- `render`: Three.js scene graph, semantic entity views, camera, lighting, VFX, quality.
+- `render`: Three.js scene graph, semantic entity views, camera, lighting, VFX, quality (`gfx.js` quality model, post chain in `render3d.js`).
 - `ui`: responsive DOM shell, focus, localization, settings, overlays, accessibility mirror.
 - `audio`: buses, event mapping, focus/background behavior, decode and memory policy.
 - `content`: versioned levels, themes, tutorials, validation metadata.

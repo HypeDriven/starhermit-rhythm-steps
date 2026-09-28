@@ -22,6 +22,8 @@ import {
   defaultSave, loadSave, writeSave, unlockAchievement, starsForResult, SAVE_VERSION,
 } from '../js/persistence.js';
 import { handleMessage } from '../server.js';
+import { detectPreset, resolve, presetTier, choosePreset, describe, PRESETS, CATEGORIES } from '../js/gfx.js';
+import { GFX_STRINGS, pickLocale } from '../js/gfx-i18n.js';
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -531,6 +533,72 @@ test('rng is seeded and serializable; streams are independent', () => {
   // c should now reproduce b's full sequence from start
   assert.equal(c.next(), seqA[0]);
   assert.equal(hashString('x') >>> 0, hashString('x'));
+});
+
+// --- Graphics quality model -------------------------------------------------------
+console.log('\n[gfx]');
+test('detectPreset maps GPU strings to tiers', () => {
+  assert.equal(detectPreset('Google SwiftShader'), 'low');
+  assert.equal(detectPreset('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'low');
+  assert.equal(detectPreset('llvmpipe (LLVM 15.0.7, 256 bits)'), 'low');
+  assert.equal(detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)'), 'high');
+  assert.equal(detectPreset('Apple M2'), 'high');
+  assert.equal(detectPreset('ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)'), 'balanced');
+  assert.equal(detectPreset('Adreno (TM) 650'), 'balanced');
+  assert.equal(detectPreset(''), 'balanced');
+  assert.equal(detectPreset('Apple M2', { mobile: true }), 'balanced', 'mobile caps Auto at balanced');
+  assert.equal(detectPreset('SwiftShader', { mobile: true }), 'low');
+});
+test('resolve: auto uses the detected preset, explicit preset wins', () => {
+  const a = resolve({ preset: 'auto' }, 'low');
+  assert.equal(a.preset, 'low'); assert.equal(a.auto, true);
+  assert.equal(a.post, false, 'Low renders without a post chain');
+  assert.equal(a.shadows, 'off');
+  const h = resolve({ preset: 'high' }, 'low');
+  assert.equal(h.preset, 'high'); assert.equal(h.auto, false);
+  assert.equal(h.shadows, presetTier('high', 'shadows'));
+  assert.equal(h.post, true);
+  assert.equal(resolve(null, undefined).preset, 'balanced');
+});
+test('resolve: overrides apply per category; invalid tiers fall back to preset', () => {
+  const r = resolve({ preset: 'low', bloom: 'on', shadows: 'bogus', particles: 'high' }, 'low');
+  assert.equal(r.bloom, 'on'); assert.equal(r.shadows, 'off'); assert.equal(r.particles, 'high');
+  assert.equal(r.post, true, 'bloom override enables the post chain');
+  for (const [cat, tiers] of Object.entries(CATEGORIES)) for (const p of PRESETS) assert.ok(tiers.includes(presetTier(p, cat)), `${p}.${cat}`);
+});
+test('resolve: render scale clamps to 50–200% of the preset scale', () => {
+  assert.equal(resolve({ preset: 'high', render_scale: 5 }, 'low').scale, 2);
+  assert.equal(resolve({ preset: 'high', render_scale: 0.1 }, 'low').scale, 0.5);
+  assert.equal(resolve({ preset: 'ultra', render_scale: 1 }, 'low').scale, 1.25);
+  assert.equal(resolve({ preset: 'low' }, 'low').adaptive, true);
+  assert.equal(resolve({ preset: 'low', adaptive: false, show_fps: true }, 'low').showFps, true);
+});
+test('choosing a preset clears overrides but keeps scale/adaptive/fps', () => {
+  const next = choosePreset({ preset: 'low', bloom: 'on', ao: 'high', render_scale: 1.5, adaptive: false, show_fps: true }, 'ultra');
+  assert.deepEqual(next, { preset: 'ultra', render_scale: 1.5, adaptive: false, show_fps: true });
+  assert.equal(choosePreset({}, 'nope').preset, 'auto');
+});
+test('describe summarises cost; every locale has every string', () => {
+  const d = describe(resolve({ preset: 'high' }, 'low'), [1280, 800]);
+  assert.match(d, /1024² shadows/); assert.match(d, /1280×800 px/);
+  const keys = Object.keys(GFX_STRINGS['en-US']);
+  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) {
+    const t = GFX_STRINGS[loc];
+    for (const k of keys) assert.ok(t[k], `${loc}.${k}`);
+    for (const c of Object.keys(CATEGORIES)) assert.ok(t.cats[c], `${loc}.cats.${c}`);
+    for (const tiers of Object.values(CATEGORIES)) for (const tier of tiers) assert.ok(t.tiers[tier], `${loc}.tiers.${tier}`);
+    for (const p of PRESETS) assert.ok(t.presets[p], `${loc}.presets.${p}`);
+  }
+  assert.equal(pickLocale('es-MX'), 'es-419'); assert.equal(pickLocale('fr-CA'), 'fr-CA'); assert.equal(pickLocale('xx'), 'en-US');
+});
+test('legacy quality tier migrates into the graphics model', () => {
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  const s = defaultSave();
+  delete s.settings.gfx;
+  s.settings.qualityTier = 'medium';
+  writeSave(s, storage);
+  assert.deepEqual(loadSave(storage).settings.gfx, { preset: 'balanced' });
 });
 
 // ------------------------------------------------------------------------------------

@@ -54,7 +54,7 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => { if (m.type() === 'error' && !browserNoise.test(m.text())) errors.push(`console: ${m.text()}`); });
+  page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`); });
 
   const step = async (name, fn) => {
     await fn();
@@ -220,6 +220,56 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
       if (!(await page.locator('#set-reduced-motion').isChecked())) throw new Error('setting did not apply');
       await page.screenshot({ path: SHOT('settings', tag) });
       await page.locator('#set-reduced-motion').uncheck(); // leave save as found
+      await page.click('#screen-settings [data-nav="back"]');
+      await page.waitForSelector('#screen-title:not(.hidden)');
+    });
+
+    await step('graphics settings: presets, override, persistence', async () => {
+      const openGfx = async () => {
+        await page.click('[data-nav="settings"]');
+        await page.waitForSelector('#screen-settings:not(.hidden)');
+        await page.waitForSelector('#gfx-controls #set-quality');
+      };
+      const gfxState = () => page.evaluate(() => ({
+        body: document.body.dataset.gfxPreset,
+        canvas: document.querySelector('#canvas-host canvas')?.dataset.gfxPreset,
+        q: window.RhythmSteps.getRenderer().q,
+        summary: document.getElementById('gfx-summary').textContent,
+      }));
+      await openGfx();
+      // Headless Chrome runs on a software GPU, so Auto resolves to Low.
+      let st = await gfxState();
+      if (st.body !== 'low') throw new Error(`Auto should resolve to low on a software GPU, got ${st.body}`);
+      await page.selectOption('#set-quality', 'low');
+      st = await gfxState();
+      if (st.canvas !== 'low' || st.q.post) throw new Error('Low preset did not apply');
+      await page.selectOption('#set-quality', 'ultra'); // MSAA + full chain; must not log anything
+      await page.waitForTimeout(400);
+      await page.selectOption('#set-quality', 'high');
+      await page.waitForFunction(() => document.body.dataset.gfxPreset === 'high');
+      st = await gfxState();
+      if (st.q.shadows !== 'medium' || st.q.bloom !== 'on') throw new Error('High preset tiers not applied');
+      await page.selectOption('#gfx-bloom', 'off');
+      await page.locator('#gfx-show-fps').check();
+      st = await gfxState();
+      if (st.q.bloom !== 'off' || /bloom/.test(st.summary)) throw new Error(`bloom override not applied (${st.summary})`);
+      if (!st.summary.includes('px')) throw new Error(`summary missing pixel size: ${st.summary}`);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: SHOT('graphics', tag) });
+      // Survives a reload.
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => window.RhythmSteps?.getPhase() === 'title');
+      await openGfx();
+      if (await page.inputValue('#set-quality') !== 'high') throw new Error('preset not persisted');
+      if (await page.inputValue('#gfx-bloom') !== 'off') throw new Error('override not persisted');
+      if (!(await page.locator('#gfx-show-fps').isChecked())) throw new Error('fps toggle not persisted');
+      if (!(await page.locator('#fps-meter').isVisible())) throw new Error('fps meter hidden');
+      st = await gfxState();
+      if (st.body !== 'high' || st.q.bloom !== 'off') throw new Error('restored settings not applied to the renderer');
+      // Choosing a preset clears overrides; back to Auto keeps later steps cheap.
+      await page.selectOption('#set-quality', 'auto');
+      if (await page.inputValue('#gfx-bloom') !== 'preset') throw new Error('preset change did not clear overrides');
+      await page.locator('#gfx-show-fps').uncheck();
       await page.click('#screen-settings [data-nav="back"]');
       await page.waitForSelector('#screen-title:not(.hidden)');
     });

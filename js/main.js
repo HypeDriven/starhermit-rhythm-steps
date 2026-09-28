@@ -2,7 +2,8 @@
 // Owns the frame loop, input routing, game-state transitions, and progression.
 
 import { GameSession } from './session.js';
-import { Renderer3D, webglAvailable } from './render3d.js';
+import { Renderer3D, webglAvailable, detectedPreset } from './render3d.js';
+import { initGraphicsPanel, buildGraphicsPanel } from './gfx-ui.js';
 import { Renderer2D } from './render2d.js';
 import { audio } from './audio.js';
 import * as ui from './ui.js';
@@ -59,6 +60,7 @@ function boot() {
   createRenderer();
 
   ui.initUI(controller);
+  initGraphicsPanel(controller);
   ui.setLaneKeyLabels(save.settings.keys);
   bindGlobalInput();
   bindLaneButtons();
@@ -103,6 +105,7 @@ function initCloudSave() {
     persistSave();
     applySettingsSideEffects();
     ui.refreshSettingsPanel();
+    buildGraphicsPanel();
     ui.setLaneKeyLabels(save.settings.keys);
     renderTitleStatuses();
   });
@@ -112,7 +115,6 @@ function createRenderer() {
   const host = document.getElementById('canvas-host');
   if (renderer) { renderer.dispose(); renderer = null; host.innerHTML = ''; }
   const theme = currentChart ? getTheme(save.settings.themeOverride || currentChart.theme) : getTheme('neon-causeway');
-  const quality = resolveQualityTier();
   const opts = {
     theme,
     cvdPalette: save.settings.cvdPalette,
@@ -123,7 +125,7 @@ function createRenderer() {
     // Left-handed layout reverses the on-screen lane buttons; the rendered
     // lanes mirror with them so column order always matches.
     mirrorLanes: !!save.settings.leftHanded,
-    quality,
+    gfx: save.settings.gfx,
     seed: currentChart ? currentChart.seed : 1,
     onLaneInput: handleLanePointer,
     onContextLost: () => {
@@ -132,7 +134,7 @@ function createRenderer() {
     },
   };
   if (webglAvailable()) {
-    try { renderer = new Renderer3D(host, opts); usingFallback = false; }
+    try { renderer = new Renderer3D(host, opts); usingFallback = false; lastGfxJson = JSON.stringify(save.settings.gfx || {}); }
     catch (e) { console.warn('3D init failed, using 2D', e); renderer = new Renderer2D(host, opts); usingFallback = true; }
   } else {
     renderer = new Renderer2D(host, opts);
@@ -140,14 +142,17 @@ function createRenderer() {
   }
 }
 
-function resolveQualityTier() {
-  const t = save.settings.qualityTier;
-  if (t !== 'auto') return t;
-  // Capability detection: coarse pointer or small screen → medium; low cores → low.
-  const cores = navigator.hardwareConcurrency || 4;
-  if (cores <= 4 && matchMedia('(pointer: coarse)').matches) return 'low';
-  if (matchMedia('(pointer: coarse)').matches) return 'medium';
-  return 'high';
+let lastGfxJson = null;
+
+// Apply graphics settings live; only a canvas-MSAA change needs a new context.
+function applyGraphics() {
+  const json = JSON.stringify(save.settings.gfx || {});
+  if (!renderer || !renderer.is3D || json === lastGfxJson) return;
+  lastGfxJson = json;
+  if (renderer.setGraphics(save.settings.gfx)) {
+    createRenderer();
+    renderer.resize();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +174,7 @@ function applySettingsSideEffects() {
     renderer.setMirrorLanes?.(!!s.leftHanded);
     renderer.setReducedMotion?.(!!s.reducedMotion);
     renderer.setNoteSpeed?.(s.noteSpeed || 1);
-    renderer.setQuality?.(resolveQualityTier());
+    applyGraphics();
     if (currentChart) renderer.setTheme(getTheme(save.settings.themeOverride || currentChart.theme), !!s.cvdPalette);
   }
 }
@@ -182,6 +187,16 @@ const controller = {
   utcToday: () => platform.nowUtcDateString(),
   usingFallbackRenderer: () => usingFallback,
   uiSound(kind) { audio.init(); audio.playUi(kind); },
+
+  getGfx: () => save.settings.gfx || {},
+  detectedPreset: () => (renderer && renderer.is3D ? renderer.detected : detectedPreset()),
+  graphicsInfo: () => (renderer && renderer.is3D ? renderer.graphicsInfo() : null),
+  setGfx(next) {
+    save.settings.gfx = { ...next };
+    applyGraphics();
+    persistSave();
+    platform.telemetry('settings-change');
+  },
 
   applySetting(key, value) {
     save.settings[key] = value;
@@ -214,6 +229,7 @@ const controller = {
     persistSave();
     applySettingsSideEffects();
     ui.refreshSettingsPanel();
+    buildGraphicsPanel();
     ui.setLaneKeyLabels(save.settings.keys);
     ui.toast('Progress reset');
     ui.showScreen('title');

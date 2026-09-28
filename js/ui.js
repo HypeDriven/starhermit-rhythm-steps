@@ -457,7 +457,6 @@ function buildSettingsPanel() {
   bind('set-vol-music', 'volMusic'); bind('set-vol-effects', 'volEffects');
   bind('set-vol-ambience', 'volAmbience'); bind('set-vol-voice', 'volVoice');
   bind('set-muted', 'muted', true);
-  bind('set-quality', 'qualityTier');
   bind('set-reduced-motion', 'reducedMotion', true);
   bind('set-camera-sway', 'cameraSway', true);
   bind('set-note-speed', 'noteSpeed');

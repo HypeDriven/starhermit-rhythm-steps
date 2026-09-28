@@ -169,7 +169,12 @@ body.left-handed #lane-buttons { flex-direction: row-reverse; }
   font-size: 1.1rem; cursor: pointer;
 }
 
-.title-panel { text-align: center; }
+/* The title lets the live causeway glow through behind the menu panel. */
+#screen-title { background: radial-gradient(900px 520px at 50% 40%, rgba(5, 7, 15, 0.35), rgba(5, 7, 15, 0.82)); }
+.title-panel { text-align: center; backdrop-filter: blur(6px); }
+#app:has(#screen-title:not(.hidden)) #hud,
+#app:has(#screen-title:not(.hidden)) #lane-buttons,
+#app:has(#screen-title:not(.hidden)) #judgment-pop { visibility: hidden; }
 .title-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0; }
 .mode-btn { display: flex; flex-direction: column; gap: 2px; padding: 14px; }
 .mode-btn small { color: var(--muted); font-weight: 400; }
@@ -223,7 +228,28 @@ body.left-handed #lane-buttons { flex-direction: row-reverse; }
 
 /* Settings */
 .settings-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-fieldset { border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px; }
+fieldset { border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px; min-width: 0; }
+
+/* Graphics section: spans the settings grid; controls flow in columns. */
+.fieldset-wide { grid-column: 1 / -1; }
+.gfx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); column-gap: 14px; }
+.gfx-grid .field { margin: 6px 0; min-width: 0; }
+.gfx-grid select { width: 100%; min-width: 0; }
+.gfx-range-head { display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.gfx-range-head output { color: var(--text); font-variant-numeric: tabular-nums; }
+.gfx-toggles { grid-column: 1 / -1; display: flex; flex-wrap: wrap; column-gap: 20px; }
+.gfx-summary { grid-column: 1 / -1; margin: 6px 0 0; overflow-wrap: anywhere; }
+.gfx-note { grid-column: 1 / -1; margin: 6px 0 0; color: #ffd25e; font-size: 0.9rem; }
+.gfx-motion { display: flex; flex-wrap: wrap; align-items: center; column-gap: 20px; border-top: 1px solid var(--panel-border); margin-top: 8px; padding-top: 4px; }
+.gfx-motion .field { flex: 1 1 200px; }
+
+/* Frame-rate readout: clear of the HUD controls and lane tray, never interactive. */
+#fps-meter {
+  position: fixed; left: calc(12px + var(--safe-left)); top: calc(56px + var(--safe-top)); z-index: 40;
+  pointer-events: none; font: 600 0.75rem/1.2 ui-monospace, monospace; color: #b8ffd9;
+  background: rgba(0, 0, 0, 0.55); padding: 3px 7px; border-radius: 6px;
+}
+#fps-meter[hidden] { display: none; }
 legend { color: var(--accent); padding: 0 6px; }
 .keybind-btn { display: flex; justify-content: space-between; width: 100%; }
 

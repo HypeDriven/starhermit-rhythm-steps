@@ -185,6 +185,15 @@
     <div class="panel panel-wide">
       <h2 id="settings-h">Settings</h2>
       <div class="settings-cols">
+        <fieldset id="settings-graphics" class="fieldset-wide">
+          <legend id="gfx-legend">Graphics</legend>
+          <div id="gfx-controls" class="gfx-grid"></div>
+          <div class="gfx-motion">
+            <label class="check"><input type="checkbox" id="set-reduced-motion"> Reduced motion</label>
+            <label class="check"><input type="checkbox" id="set-camera-sway"> Camera sway</label>
+            <label class="field">Note speed <input type="range" id="set-note-speed" min="0.6" max="1.6" step="0.1"></label>
+          </div>
+        </fieldset>
         <fieldset>
           <legend>Audio</legend>
           <label class="field">Music <input type="range" id="set-vol-music" min="0" max="1" step="0.05"></label>
@@ -192,18 +201,6 @@
           <label class="field">Ambience <input type="range" id="set-vol-ambience" min="0" max="1" step="0.05"></label>
           <label class="field">Voice cues <input type="range" id="set-vol-voice" min="0" max="1" step="0.05"></label>
           <label class="check"><input type="checkbox" id="set-muted"> Mute all</label>
-        </fieldset>
-        <fieldset>
-          <legend>Graphics</legend>
-          <label class="field">Quality
-            <select id="set-quality">
-              <option value="auto">Auto</option><option value="high">High</option>
-              <option value="medium">Medium</option><option value="low">Low</option>
-            </select>
-          </label>
-          <label class="check"><input type="checkbox" id="set-reduced-motion"> Reduced motion</label>
-          <label class="check"><input type="checkbox" id="set-camera-sway"> Camera sway</label>
-          <label class="field">Note speed <input type="range" id="set-note-speed" min="0.6" max="1.6" step="0.1"></label>
         </fieldset>
         <fieldset>
           <legend>Accessibility</legend>
@@ -286,6 +283,9 @@
   <div id="toast-host" aria-live="polite"></div>
   <div id="sr-announcer" class="sr-only" aria-live="assertive"></div>
 </div>
+<script type="importmap">
+{ "imports": { "three": "./js/vendor/three.module.min.js", "three/addons/": "./js/vendor/three/addons/" } }
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

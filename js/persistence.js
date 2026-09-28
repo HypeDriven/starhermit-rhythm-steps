@@ -11,7 +11,10 @@ export const DEFAULT_SETTINGS = {
   // audio buses (0..1)
   volMusic: 0.8, volEffects: 0.9, volAmbience: 0.5, volVoice: 0.8, muted: false,
   // graphics
-  qualityTier: 'auto', // auto | high | medium | low
+  qualityTier: 'auto', // legacy (pre-gfx) tier; migrated into `gfx` on load
+  // graphics quality model (see gfx.js): { preset: 'auto'|low|balanced|high|ultra,
+  // render_scale, adaptive, show_fps, <category>: tier } — never mutated in place
+  gfx: { preset: 'auto' },
   reducedMotion: false,
   bloom: true,
   // accessibility
@@ -73,7 +76,9 @@ export function parseSaveDoc(raw) {
     const migrated = migrate(doc);
     if (migrated.version !== SAVE_VERSION) return null;
     if (checksum(migrated) !== migrated.checksum) return null;
+    const legacyGfx = !migrated.settings?.gfx;
     migrated.settings = { ...DEFAULT_SETTINGS, ...migrated.settings };
+    if (legacyGfx) migrated.settings.gfx = { preset: { high: 'high', medium: 'balanced', low: 'low' }[migrated.settings.qualityTier] || 'auto' };
     return migrated;
   } catch (e) {
     return null;
@@ -92,7 +97,9 @@ export function loadSave(storage = globalThis.localStorage) {
       console.warn('[save] checksum mismatch — resetting to a safe default');
       return defaultSave();
     }
+    const legacyGfx = !migrated.settings?.gfx;
     migrated.settings = { ...DEFAULT_SETTINGS, ...migrated.settings };
+    if (legacyGfx) migrated.settings.gfx = { preset: { high: 'high', medium: 'balanced', low: 'low' }[migrated.settings.qualityTier] || 'auto' };
     return migrated;
   } catch (e) {
     console.warn('[save] load failed', e);
