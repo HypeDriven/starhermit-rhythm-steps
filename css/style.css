@@ -178,7 +178,8 @@ body.left-handed #lane-buttons { flex-direction: row-reverse; }
 .title-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0; }
 .mode-btn { display: flex; flex-direction: column; gap: 2px; padding: 14px; }
 .mode-btn small { color: var(--muted); font-weight: 400; }
-.title-footer { display: flex; gap: 10px; justify-content: center; }
+.title-footer { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+#btn-signin { display: block; margin: 12px auto 0; }
 .compat-note { color: #ffd25e; font-size: 0.9rem; }
 
 .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }

@@ -8,6 +8,7 @@
 <title>Rhythm Steps</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="browser-guard.js"></script>
+<script src="starhermit-sdk.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#playfield">Skip to playfield</a>
@@ -66,7 +67,9 @@
         <button class="btn btn-ghost" data-nav="settings">Settings</button>
         <button class="btn btn-ghost" data-nav="help">Help</button>
         <button class="btn btn-ghost" data-nav="profile">Profile</button>
+        <button id="btn-invite" class="btn btn-ghost hidden">Invite a friend</button>
       </div>
+      <button id="btn-signin" class="btn hidden">Sign in with StarHermit</button>
       <p id="compat-note" class="compat-note hidden">3D graphics unavailable — running the simplified renderer. Your progress is unaffected.</p>
     </div>
   </section>

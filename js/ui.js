@@ -4,7 +4,10 @@
 
 import { JOURNEY_STAGES, CHALLENGES, PRACTICE_DIFFICULTIES, THEMES, LESSONS, dailyInfo } from './content.js';
 import { ACHIEVEMENTS } from './persistence.js';
-import { isHosted, fetchGameInfo, fetchLeaderboard } from './platform.js';
+import { isHosted, fetchGameInfo, fetchLeaderboard, keyLabel } from './platform.js';
+import { shText } from './sh-i18n.js';
+
+export { shText };
 import { compareResults, chaseEntry } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
@@ -32,6 +35,10 @@ export function initUI(controller) {
   });
 
   $('btn-play').addEventListener('click', () => { ctl.uiSound('confirm'); ctl.quickPlay(); });
+  $('btn-signin').textContent = shText('signIn');
+  $('btn-invite').textContent = shText('invite');
+  $('btn-signin').addEventListener('click', () => { ctl.uiSound('confirm'); ctl.signIn(); });
+  $('btn-invite').addEventListener('click', () => { ctl.uiSound('confirm'); ctl.invite(); });
   $('btn-setup-start').addEventListener('click', () => { ctl.uiSound('confirm'); ctl.confirmSetup(); });
   $('btn-pause').addEventListener('click', () => ctl.pauseGame());
   $('btn-resume').addEventListener('click', () => ctl.resumeGame());
@@ -291,7 +298,11 @@ function renderProfile() {
     ? 'Name comes from your StarHermit account.'
     : 'Local guest name, shown only on this device.';
   $('profile-sync').textContent = isHosted() ? 'Connecting…' : 'Local save only';
-  $('profile-avatar').style.background = `hsl(${save.profile.avatarHue}, 70%, 55%)`;
+  const av = $('profile-avatar');
+  av.style.background = `hsl(${save.profile.avatarHue}, 70%, 55%)`;
+  if (isHosted() && ctl.avatarUrl) {
+    ctl.avatarUrl().then((url) => { if (url) av.style.background = `center / cover no-repeat url("${url}")`; });
+  }
   $('profile-mastery').textContent = `Level ${save.mastery.level} (${save.mastery.xp} XP)`;
   $('profile-sessions').textContent = String(save.stats.sessionsPlayed);
   $('profile-combo').textContent = String(save.stats.bestCombo);
@@ -398,8 +409,8 @@ export function laneButtonState(lane, active) {
 export function setLaneKeyLabels(keys) {
   document.querySelectorAll('.lane-btn').forEach((btn) => {
     const lane = parseInt(btn.dataset.lane, 10);
-    btn.querySelector('.lane-key').textContent = (keys[lane] || '?').toUpperCase();
-    btn.setAttribute('aria-label', `Lane ${lane + 1} (${(keys[lane] || '?').toUpperCase()})`);
+    btn.querySelector('.lane-key').textContent = keyLabel(keys[lane]);
+    btn.setAttribute('aria-label', `Lane ${lane + 1} (${keyLabel(keys[lane])})`);
   });
 }
 
@@ -476,19 +487,28 @@ function buildSettingsPanel() {
   s.keys.forEach((key, lane) => {
     const btn = document.createElement('button');
     btn.className = 'btn keybind-btn';
-    btn.innerHTML = `<span>Lane ${lane + 1}</span><kbd>${key.toUpperCase()}</kbd>`;
+    btn.innerHTML = `<span>Lane ${lane + 1}</span><kbd></kbd>`;
+    btn.querySelector('kbd').textContent = keyLabel(key);
     btn.addEventListener('click', () => {
-      btn.innerHTML = `<span>Lane ${lane + 1}</span><kbd>press a key…</kbd>`;
+      btn.querySelector('kbd').textContent = shText('pressKey');
       const handler = (e) => {
         e.preventDefault();
+        e.stopPropagation();
         document.removeEventListener('keydown', handler, true);
-        ctl.rebindKey(lane, e.key.toLowerCase());
+        // Escape cancels; lanes bind by KeyboardEvent.code.
+        if (e.code !== 'Escape' && e.code) ctl.rebindKey(lane, e.code);
         buildSettingsPanel();
       };
       document.addEventListener('keydown', handler, true);
     });
     kb.appendChild(btn);
   });
+  const reset = document.createElement('button');
+  reset.className = 'btn btn-ghost';
+  reset.id = 'btn-reset-keys';
+  reset.textContent = shText('resetKeys');
+  reset.addEventListener('click', () => { ctl.resetKeys(); buildSettingsPanel(); });
+  kb.appendChild(reset);
 }
 
 export function refreshSettingsPanel() { buildSettingsPanel(); }
@@ -498,13 +518,13 @@ export function refreshSettingsPanel() { buildSettingsPanel(); }
 // ---------------------------------------------------------------------------
 function buildHelpCards() {
   const s = ctl.getSave().settings;
-  const keys = s.keys.map((k) => k.toUpperCase());
+  const keys = s.keys.map((k) => keyLabel(k));
   const cards = [
     { title: 'Tap notes', body: `Notes descend toward the glowing line. Press the lane when the note touches it. Keys: ${keys.map((k, i) => `<kbd>${k}</kbd>`).join(' ')} or tap the lane buttons.`, demo: ['tap'] },
     { title: 'Hold notes', body: `Long glowing bars must be held from head to tail, then released. Releasing early breaks your combo. Hold style: ${s.holdMode}.`, demo: ['hold'] },
     { title: 'Timing grades', body: 'Perfect ±45ms, Great ±90ms, Good ±135ms. Later than that is a miss and resets your combo.', demo: [] },
     { title: 'Combo & score', body: 'Score = notes + combo bonus + hold bonus. Every 10 combo raises the per-note bonus. Results always show the full breakdown.', demo: [] },
-    { title: 'Pause', body: `Press <kbd>${(s.pauseKey || 'Escape').toUpperCase()}</kbd> or the ⏸ button to pause. Backgrounding the tab pauses automatically.`, demo: [] },
+    { title: 'Pause', body: `Press <kbd>${keyLabel((ctl.pauseKeys && ctl.pauseKeys()[0]) || 'Escape')}</kbd> or the ⏸ button to pause. Backgrounding the tab pauses automatically.`, demo: [] },
     { title: 'Keyboard & gamepad', body: 'Menus: arrows + Enter to confirm, Escape to go back. Gamepad: D-pad or face buttons hit lanes, Start pauses.', demo: [] },
   ];
   const host = $('help-cards');
@@ -532,6 +552,13 @@ const SYNC_TEXT = {
 };
 
 // Cloud mirror status, surfaced on the profile screen.
+// StarHermit account chrome on the title: sign-in when possible, invite when signed in.
+export function setAccount() {
+  const signedIn = ctl.isSignedIn();
+  $('btn-signin').classList.toggle('hidden', signedIn || !ctl.canSignIn());
+  $('btn-invite').classList.toggle('hidden', !signedIn);
+}
+
 export function setSyncStatus(status) {
   const el = $('profile-sync');
   if (el) el.textContent = SYNC_TEXT[status] || String(status);

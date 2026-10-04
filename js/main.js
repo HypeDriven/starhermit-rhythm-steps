@@ -10,7 +10,7 @@ import * as ui from './ui.js';
 import * as platform from './platform.js';
 import {
   loadSave, writeSave, defaultSave, unlockAchievement, awardMasteryXp,
-  starsForResult, markPlayedToday, ACHIEVEMENTS, parseSaveDoc,
+  starsForResult, markPlayedToday, ACHIEVEMENTS, parseSaveDoc, DEFAULT_SETTINGS,
 } from './persistence.js';
 import {
   journeyChart, JOURNEY_STAGES, dailyChart, practiceChart, challengeChart,
@@ -46,22 +46,36 @@ let gamepadNavCooldown = 0;
 function persistSave() {
   writeSave(save);
   platform.scheduleCloudPush(save);
+  platform.mirrorSettings(save.settings, DEFAULT_SETTINGS);
+}
+
+// Lane keys are KeyboardEvent.code values; older saves stored e.key letters.
+function normalizeKeys(s) {
+  const def = DEFAULT_SETTINGS.keys;
+  const codes = (Array.isArray(s.keys) ? s.keys : def).map((k, i) => platform.keyToCode(k) || def[i]);
+  s.keys = codes.length === 4 && new Set(codes).size === 4 ? codes : def.slice();
 }
 
 function boot() {
+  platform.detectHost(); // reads + strips the launch fragment first
   save = loadSave();
+  normalizeKeys(save.settings);
   applySettingsSideEffects();
-  platform.detectHost();
   platform.setTelemetryConsent(!!save.settings.telemetryConsent);
   platform.setSyncStatusHandler(ui.setSyncStatus);
   platform.syncTime().then(() => renderTitleStatuses());
   initHostedProfile();
-  initCloudSave();
+  initHosted();
   createRenderer();
 
   ui.initUI(controller);
   initGraphicsPanel(controller);
   ui.setLaneKeyLabels(save.settings.keys);
+  ui.setAccount();
+  platform.onAuth((a) => {
+    if (!a.signedIn) ui.toast(ui.shText('signedOut'));
+    ui.setAccount();
+  });
   bindGlobalInput();
   bindLaneButtons();
   bindViewportLifecycle();
@@ -88,27 +102,34 @@ function initHostedProfile() {
   });
 }
 
-// Hosted cloud mirror: the remote doc wins when it is at least as new as the
-// local cache; a newer local doc (offline play since the last sync) is
-// pushed back up. localStorage remains the offline cache throughout.
-function initCloudSave() {
-  if (!platform.isHosted()) return;
-  platform.cloudLoad().then((r) => {
-    if (!r.ok || !r.doc) return;
-    const remote = parseSaveDoc(r.doc);
-    if (!remote) return;
-    if ((remote.updatedAt || 0) < (save.updatedAt || 0)) {
-      platform.scheduleCloudPush(save);
-      return;
+// Hosted start-up, in order: cloud mirror (the remote doc wins when it is at
+// least as new as the local cache; a newer local doc is pushed back up), then
+// the per-player settings KV (platform wins), then keyboard bindings.
+// localStorage remains the offline cache throughout. Standalone this only
+// resolves the local bindings (no network).
+async function initHosted() {
+  if (platform.isHosted()) {
+    const r = await platform.cloudLoad();
+    const remote = r.ok && r.doc ? parseSaveDoc(r.doc) : null;
+    if (remote && (remote.updatedAt || 0) >= (save.updatedAt || 0)) {
+      save = remote;
+      normalizeKeys(save.settings);
+      writeSave(save);
+    } else {
+      platform.scheduleCloudPush(save); // empty slot or newer local doc
     }
-    save = remote;
-    persistSave();
-    applySettingsSideEffects();
-    ui.refreshSettingsPanel();
-    buildGraphicsPanel();
-    ui.setLaneKeyLabels(save.settings.keys);
-    renderTitleStatuses();
-  });
+    if (await platform.loadSettings(save.settings, DEFAULT_SETTINGS)) writeSave(save);
+  }
+  await platform.loadBindings(save.settings.keys);
+  const b = platform.getBindings();
+  save.settings.keys = platform.LANE_ACTIONS.map((a, i) => (b[a] && b[a][0]) || save.settings.keys[i]);
+  if (!platform.isHosted()) return;
+  applySettingsSideEffects();
+  ui.refreshSettingsPanel();
+  buildGraphicsPanel();
+  ui.setLaneKeyLabels(save.settings.keys);
+  ui.refreshHelpCards();
+  renderTitleStatuses();
 }
 
 function createRenderer() {
@@ -208,14 +229,36 @@ const controller = {
   },
 
   rebindKey(lane, key) {
-    // Prevent duplicate bindings.
+    // key is a KeyboardEvent.code. Prevent duplicate bindings (swap).
     const existing = save.settings.keys.indexOf(key);
     if (existing >= 0 && existing !== lane) save.settings.keys[existing] = save.settings.keys[lane];
     save.settings.keys[lane] = key;
+    platform.setLocalBindings(save.settings.keys);
+    platform.saveLaneBindings(save.settings.keys); // controls API when signed in
     persistSave();
     ui.setLaneKeyLabels(save.settings.keys);
     ui.refreshHelpCards();
   },
+
+  resetKeys() {
+    save.settings.keys = DEFAULT_SETTINGS.keys.slice();
+    platform.setLocalBindings(save.settings.keys);
+    platform.resetControls();
+    persistSave();
+    ui.setLaneKeyLabels(save.settings.keys);
+    ui.refreshHelpCards();
+  },
+  canSignIn: () => platform.canSignIn(),
+  isSignedIn: () => platform.isHosted(),
+  signIn: () => platform.signIn(),
+  async invite() {
+    const url = platform.inviteLink();
+    if (!url) return;
+    try { await navigator.clipboard.writeText(url); ui.toast(ui.shText('inviteCopied')); }
+    catch { ui.toast(ui.shText('inviteLink', { url }), 8000); }
+  },
+  avatarUrl: () => platform.avatarUrl(),
+  pauseKeys: () => platform.getBindings().pause || ['Escape'],
 
   updateProfile({ displayName }) {
     if (save.profile.accountLinked) { ui.toast('Name comes from your StarHermit account'); return; }
@@ -226,6 +269,7 @@ const controller = {
 
   resetSave() {
     save = defaultSave();
+    platform.setLocalBindings(save.settings.keys);
     persistSave();
     applySettingsSideEffects();
     ui.refreshSettingsPanel();
@@ -686,12 +730,15 @@ function bindLaneButtons() {
 const pressedKeys = new Set();
 
 function bindGlobalInput() {
+  // Keydown is routed by KeyboardEvent.code through the player's bindings
+  // (control.* in starhermit.txt; platform overrides when signed in).
   document.addEventListener('keydown', (e) => {
     if (e.repeat) return; // action identifiers guard double commits; ignore OS repeat
-    const key = e.key.toLowerCase();
+    const code = e.code;
+    const action = platform.actionFor(code);
 
-    // Pause / cancel.
-    if (key === (save.settings.pauseKey || 'escape') || key === 'escape') {
+    // Pause / cancel (Escape always backs out of menus).
+    if (action === 'pause' || code === 'Escape') {
       // Settings/help opened over the pause menu close first — Escape must not
       // resume play while a panel is still covering the playfield.
       if (ui.overlayScreenVisible()) { ui.navBack(); e.preventDefault(); return; }
@@ -703,18 +750,18 @@ function bindGlobalInput() {
 
     if (phase !== 'active' || !session || session.paused) return;
 
-    const lane = save.settings.keys.indexOf(key);
-    if (lane >= 0 && !pressedKeys.has(key)) {
-      pressedKeys.add(key);
+    const lane = platform.LANE_ACTIONS.indexOf(action);
+    if (lane >= 0 && !pressedKeys.has(code)) {
+      pressedKeys.add(code);
       e.preventDefault();
       laneDown(lane);
     }
   });
 
   document.addEventListener('keyup', (e) => {
-    const key = e.key.toLowerCase();
-    if (!pressedKeys.delete(key)) return;
-    const lane = save.settings.keys.indexOf(key);
+    const code = e.code;
+    if (!pressedKeys.delete(code)) return;
+    const lane = platform.LANE_ACTIONS.indexOf(platform.actionFor(code));
     if (lane >= 0) laneUp(lane);
   });
 

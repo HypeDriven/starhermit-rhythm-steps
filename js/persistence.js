@@ -25,8 +25,9 @@ export const DEFAULT_SETTINGS = {
   captions: true,
   cameraSway: true,
   // controls (desktop bindings; touch stays responsive UI)
-  keys: ['d', 'f', 'j', 'k'],
-  pauseKey: 'escape',
+  // lane keys as KeyboardEvent.code (older saves held e.key letters; migrated on load)
+  keys: ['KeyD', 'KeyF', 'KeyJ', 'KeyK'],
+  pauseKey: 'Escape',
   // gameplay prefs
   noteSpeed: 1.0, // scroll speed multiplier (0.6..1.6) — cosmetic, lead time constant
   themeOverride: null,
