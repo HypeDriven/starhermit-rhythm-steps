@@ -64,7 +64,6 @@ function boot() {
   platform.setTelemetryConsent(!!save.settings.telemetryConsent);
   platform.setSyncStatusHandler(ui.setSyncStatus);
   platform.syncTime().then(() => renderTitleStatuses());
-  initHostedProfile();
   initHosted();
   createRenderer();
 
@@ -90,16 +89,15 @@ function boot() {
 
 // Hosted identity: the account nickname from the platform profile replaces
 // the local guest name (read-only in the UI); "Player "+id8 fallback lives
-// in the platform adapter.
-function initHostedProfile() {
-  if (!platform.isHosted()) return;
-  platform.loadProfile().then((name) => {
-    if (!name) return;
-    save.profile.displayName = name;
-    save.profile.accountLinked = true;
-    save.profile.guest = false;
-    persistSave();
-  });
+// in the platform adapter. Returns true when the save changed.
+function applyHostedProfile(name) {
+  if (!name) return false;
+  const p = save.profile;
+  if (p.displayName === name && p.accountLinked && !p.guest) return false;
+  p.displayName = name;
+  p.accountLinked = true;
+  p.guest = false;
+  return true;
 }
 
 // Hosted start-up, in order: cloud mirror (the remote doc wins when it is at
@@ -109,15 +107,20 @@ function initHostedProfile() {
 // resolves the local bindings (no network).
 async function initHosted() {
   if (platform.isHosted()) {
+    // The profile is fetched in parallel but applied only after the cloud
+    // doc has been compared: writing the nickname first would bump the local
+    // updatedAt and make a newer cloud save lose to the stale local one.
+    const profile = platform.loadProfile().catch(() => null);
     const r = await platform.cloudLoad();
     const remote = r.ok && r.doc ? parseSaveDoc(r.doc) : null;
-    if (remote && (remote.updatedAt || 0) >= (save.updatedAt || 0)) {
+    const useRemote = remote && (remote.updatedAt || 0) >= (save.updatedAt || 0);
+    if (useRemote) {
       save = remote;
       normalizeKeys(save.settings);
-      writeSave(save);
-    } else {
-      platform.scheduleCloudPush(save); // empty slot or newer local doc
     }
+    const renamed = applyHostedProfile(await profile);
+    writeSave(save);
+    if (!useRemote || renamed) platform.scheduleCloudPush(save); // empty slot, newer local doc, or a new account name
     if (await platform.loadSettings(save.settings, DEFAULT_SETTINGS)) writeSave(save);
   }
   await platform.loadBindings(save.settings.keys);
