@@ -460,7 +460,7 @@ export class Renderer3D {
     for (let i = 0; i < starCount; i++) {
       pos[i * 3] = (starRng.next() - 0.5) * 260;
       pos[i * 3 + 1] = 6 + starRng.next() * 90;
-      pos[i * 3 + 2] = -starRng.next() * 240;
+      pos[i * 3 + 2] = -40 - starRng.next() * 200; // keep clear of the camera: near points render as big squares
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({

@@ -99,14 +99,14 @@ button, input, select { font: inherit; color: inherit; }
 
 #countdown-overlay {
   position: absolute; inset: 0; display: grid; place-items: center; z-index: 8;
-  font-size: clamp(4rem, 18vw, 9rem); font-weight: 900; color: var(--accent);
+  font-size: clamp(4rem, calc(18vw / var(--ui-scale, 1)), 9rem); font-weight: 900; color: var(--accent);
   text-shadow: 0 0 40px rgba(53, 224, 255, 0.6); pointer-events: none;
 }
 
 #lesson-overlay {
   position: absolute; top: calc(64px + var(--safe-top)); left: 50%; transform: translateX(-50%);
   background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px;
-  padding: 12px 20px; max-width: min(520px, 92vw); z-index: 7; text-align: center;
+  padding: 12px 20px; max-width: min(520px, calc(92vw / var(--ui-scale, 1))); z-index: 7; text-align: center;
 }
 #lesson-text { font-size: 1.05rem; }
 #lesson-progress { color: var(--accent); font-weight: 600; margin-top: 4px; }
@@ -142,10 +142,12 @@ body.left-handed #lane-buttons { flex-direction: row-reverse; }
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 .panel-wide { width: min(880px, 100%); }
+/* column wrappers: transparent except in phone landscape, where setup/results split in two */
+.ls-col { display: contents; }
 .panel h1, .panel h2 { margin-top: 0; }
 .panel p { max-width: 70ch; }
 
-.game-logo { font-size: clamp(2.4rem, 8vw, 4rem); letter-spacing: 0.04em; margin-bottom: 4px; }
+.game-logo { font-size: clamp(2.4rem, calc(8vw / var(--ui-scale, 1)), 4rem); letter-spacing: 0.04em; margin-bottom: 4px; }
 .game-logo span { color: var(--accent); }
 .tagline { color: var(--muted); }
 
@@ -285,7 +287,7 @@ legend { color: var(--accent); padding: 0 6px; }
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
   background: rgba(2, 4, 10, 0.7); backdrop-filter: blur(4px);
 }
-.overlay .panel { width: min(360px, 92vw); }
+.overlay .panel { width: min(360px, calc(92vw / var(--ui-scale, 1))); }
 
 /* Toast */
 #toast-host { position: fixed; bottom: calc(90px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
@@ -299,7 +301,9 @@ legend { color: var(--accent); padding: 0 6px; }
 
 /* Wide desktop: objective rail left, status rail right, centered playfield. */
 @media (min-width: 1024px) {
-  #hud-top { right: auto; width: min(360px, 30vw); flex-direction: column; align-items: stretch; }
+  #hud-top { right: auto; width: min(360px, calc(30vw / var(--ui-scale, 1))); flex-direction: column; align-items: stretch; }
+  #hud-progress { flex: 0 0 6px; }
+  #btn-pause { align-self: flex-start; }
   #hud-objective { white-space: normal; }
   #hud-score-row { top: calc(16px + var(--safe-top)); }
   #lane-buttons { max-width: 640px; margin: 0 auto; left: 0; right: 0; }
@@ -307,7 +311,7 @@ legend { color: var(--accent); padding: 0 6px; }
 
 /* Compact desktop / tablet: rails collapse; HUD condenses. */
 @media (max-width: 1023px) {
-  #hud-objective { font-size: 0.85rem; max-width: 46vw; }
+  #hud-objective { font-size: 0.85rem; max-width: calc(46vw / var(--ui-scale, 1)); }
 }
 
 /* Portrait mobile: square-ish playfield, bottom thumb zone, top safe area. */
@@ -323,12 +327,28 @@ legend { color: var(--accent); padding: 0 6px; }
 @media (max-height: 500px) and (orientation: landscape) {
   /* lane buttons stay a horizontal row under the runway (one per lane, left
      to right, labelled) — a compact 44px strip instead of an unlabeled column */
-  #lane-buttons { left: 50%; right: auto; transform: translateX(-50%); bottom: 0; top: auto; width: min(62vw, 560px); flex-direction: row; gap: 8px; padding: 4px 0 calc(4px + var(--safe-bottom)); }
+  #lane-buttons { left: 50%; right: auto; transform: translateX(-50%); bottom: 0; top: auto; width: min(calc(62vw / var(--ui-scale, 1)), 560px); flex-direction: row; gap: 8px; padding: 4px 0 calc(4px + var(--safe-bottom)); }
   .lane-btn { min-height: 44px; flex: 1; }
   .lane-btn .lane-key { display: inline; font-size: 0.95rem; }
   #hud-score-row { top: calc(48px + var(--safe-top)); }
   #hud-score { font-size: 1.1rem; }
   #caption-line { bottom: calc(56px + var(--safe-bottom)); }
+  /* keep every menu's primary actions above the fold on a ~390px-tall screen */
+  .screen { padding-top: calc(8px + var(--safe-top)); padding-bottom: calc(8px + var(--safe-bottom)); }
+  .title-panel { width: min(640px, 100%); padding: 14px 20px; }
+  .game-logo { font-size: 1.8rem; margin: 0 0 2px; }
+  .tagline { margin: 0; font-size: 0.85rem; }
+  .btn-big { padding: 8px 36px; margin: 8px 0; }
+  .title-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 8px; }
+  .mode-btn { flex-direction: row; justify-content: center; align-items: baseline; gap: 6px; padding: 8px 10px; }
+  #btn-signin { margin-top: 6px; }
+  #screen-setup .panel, #screen-results .panel { width: min(760px, 100%); display: flex; gap: 20px; padding: 14px 20px; }
+  .ls-col { display: block; flex: 1 1 0; min-width: 0; }
+  #screen-setup .ls-col:last-child, #screen-results .ls-col:last-child { align-self: center; }
+  .grade-badge { font-size: 3rem; margin: 0; }
+  #results-headline { margin: 4px 0; }
+  .breakdown { margin: 4px 0; }
+  .breakdown th, .breakdown td { padding: 3px 4px; }
 }
 
 /* ============ Accessibility modes ============ */
@@ -347,3 +367,8 @@ body.large-text .lane-btn { min-height: 84px; }
   .btn, .toast, #hud-progress-fill { transition: none; }
   @keyframes toast-in { from { opacity: 1; } to { opacity: 1; } }
 }
+
+/* ============ Large screens ============ */
+/* ui-scale.js sets --ui-scale (1 up to 1600x1000, then min(w/1600, h/1000)). Every DOM layer over the
+   full-viewport canvas is zoomed once; the canvas itself stays unzoomed. */
+#playfield > :not(#canvas-host), #app > .screen, .overlay, #toast-host, #fps-meter, .skip-link { zoom: var(--ui-scale, 1); }

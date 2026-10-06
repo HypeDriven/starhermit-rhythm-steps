@@ -297,7 +297,7 @@ function renderProfile() {
   $('profile-name-note').textContent = linked
     ? 'Name comes from your StarHermit account.'
     : 'Local guest name, shown only on this device.';
-  $('profile-sync').textContent = isHosted() ? 'Connecting…' : 'Local save only';
+  $('profile-sync').textContent = isHosted() ? (SYNC_TEXT[lastSync] || SYNC_TEXT.connecting) : 'Local save only';
   const av = $('profile-avatar');
   av.style.background = `hsl(${save.profile.avatarHue}, 70%, 55%)`;
   if (isHosted() && ctl.avatarUrl) {
@@ -559,7 +559,9 @@ export function setAccount() {
   $('btn-invite').classList.toggle('hidden', !signedIn);
 }
 
+let lastSync = null; // the profile screen re-renders with the latest status, not "Connecting…"
 export function setSyncStatus(status) {
+  lastSync = status;
   const el = $('profile-sync');
   if (el) el.textContent = SYNC_TEXT[status] || String(status);
 }

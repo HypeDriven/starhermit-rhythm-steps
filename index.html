@@ -8,6 +8,7 @@
 <title>Rhythm Steps</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="browser-guard.js"></script>
+<script src="ui-scale.js"></script>
 <script src="starhermit-sdk.js"></script>
 </head>
 <body>
@@ -77,9 +78,12 @@
   <!-- ======== Mode setup ======== -->
   <section id="screen-setup" class="screen hidden" aria-labelledby="setup-h">
     <div class="panel">
+      <div class="ls-col">
       <h2 id="setup-h">Setup</h2>
       <p id="setup-desc"></p>
       <ul id="setup-rules" class="rule-list"></ul>
+      </div>
+      <div class="ls-col">
       <dl class="setup-meta">
         <div><dt>Duration</dt><dd id="setup-duration"></dd></div>
         <div><dt>Players</dt><dd>1</dd></div>
@@ -89,6 +93,7 @@
       <div class="row">
         <button id="btn-setup-start" class="btn btn-primary">Start</button>
         <button class="btn btn-ghost" data-nav="title">Back</button>
+      </div>
       </div>
     </div>
   </section>
@@ -161,6 +166,7 @@
   <!-- ======== Results ======== -->
   <section id="screen-results" class="screen hidden" aria-labelledby="results-h">
     <div class="panel">
+      <div class="ls-col">
       <h2 id="results-h">Results</h2>
       <div id="results-grade" class="grade-badge">S</div>
       <p id="results-headline"></p>
@@ -172,6 +178,8 @@
           <tr class="total-row"><th scope="row">Total</th><td id="res-total"></td></tr>
         </tbody>
       </table>
+      </div>
+      <div class="ls-col">
       <div id="res-counts" class="counts-row"></div>
       <p id="res-detail" class="muted"></p>
       <div id="res-achievements" class="ach-row"></div>
@@ -180,6 +188,7 @@
         <button id="btn-retry" class="btn btn-primary">Retry</button>
         <button id="btn-next" class="btn hidden">Next stage</button>
         <button class="btn btn-ghost" data-nav="title">Home</button>
+      </div>
       </div>
     </div>
   </section>
