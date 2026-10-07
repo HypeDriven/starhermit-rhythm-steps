@@ -678,6 +678,11 @@ function onTerminal(breakdown) {
 
   persistSave();
   ui.showResults(breakdown, { headline, canNext, achievements: unlockedAch, xpText, detail });
+  // Signed in: every completed run except lessons posts its total to the
+  // StarHermit high-score board.
+  if (completed && currentMode !== 'learn' && platform.isHosted()) {
+    ui.showLeaderboardPosting(platform.submitScore(breakdown.total));
+  }
   session = null;
 }
 

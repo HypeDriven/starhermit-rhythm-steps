@@ -8,9 +8,9 @@
 // renews it. The slug comes from the game_scope claim (never hard-coded).
 // Hosted mode uses: profile nickname + avatar, the cloud-save slot
 // (game:<slug>), the per-player settings KV, controls (keyboard bindings),
-// read-only leaderboards and the invite share link. There is no per-game
-// time/presence/telemetry/score-submit route for launch tokens; personal
-// bests stay in the cloud-saved document.
+// leaderboards (read + score submit through score-script.js) and the invite
+// share link. There is no per-game time/presence/telemetry route for launch
+// tokens; personal bests also stay in the cloud-saved document.
 
 const SH = () => globalThis.StarHermit || null;
 
@@ -200,9 +200,23 @@ export function resetControls() {
 }
 
 // ---------------------------------------------------------------------------
-// Leaderboards: read-only. Clients can never submit scores; personal bests
-// live in the save doc. Entries resolve userIds to nicknames.
+// Leaderboards. A completed run's total goes through StarHermit.submitScores
+// to score-script.js (high-score board); personal bests also live in the save
+// doc. Entries resolve userIds to nicknames.
 // ---------------------------------------------------------------------------
+/** Post a completed run's total; resolves { posted, rank } (rank on high-score, or null). */
+export async function submitScore(total) {
+  const sh = SH();
+  if (!sh || !sh.signedIn || typeof sh.submitScores !== 'function') return { posted: false, rank: null };
+  let keys;
+  try { keys = await sh.submitScores({ 'high-score': total }); } catch { return { posted: false, rank: null }; }
+  if (!keys || !keys.includes('high-score')) return { posted: false, rank: null };
+  try {
+    const r = await sh.leaderboard('high-score', { pageSize: 100 });
+    const me = ((r && r.items) || []).find((i) => i.userId === sh.userId);
+    return { posted: true, rank: me ? me.rank : null };
+  } catch { return { posted: true, rank: null }; }
+}
 export async function fetchGameInfo() {
   if (!isHosted()) return { ok: false, error: 'not-hosted' };
   const sh = SH();

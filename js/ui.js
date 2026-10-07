@@ -440,8 +440,20 @@ export function showResults(breakdown, { headline, canNext, achievements = [], x
     achRow.appendChild(chip);
   }
   $('res-xp').textContent = xpText;
+  $('res-lb').hidden = true;
   $('btn-next').classList.toggle('hidden', !canNext);
   announce(`Results. Grade ${breakdown.grade}. Total ${breakdown.total} points. ${headline}`);
+}
+
+/** Hosted: the results line for the StarHermit high-score board. */
+export function showLeaderboardPosting(promise) {
+  const line = $('res-lb');
+  line.hidden = false;
+  line.textContent = shText('lbPosting');
+  promise.then((r) => {
+    line.textContent = !r.posted ? shText('lbNotPosted')
+      : r.rank ? shText('lbRank', { rank: r.rank }) : shText('lbPosted');
+  });
 }
 
 function showPlayfieldHiddenThen(name) {

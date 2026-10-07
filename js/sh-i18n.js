@@ -50,39 +50,75 @@ BASE['en-GB'] = { ...BASE['en-US'] };
 const EXTRA = {
   "en-US": {
     "resetKeys": "Reset keys",
-    "pressKey": "press a key…"
+    "pressKey": "press a key…",
+    "lbPosting": "Posting score to the leaderboard…",
+    "lbRank": "Leaderboard rank: #{rank}",
+    "lbPosted": "Score posted to the leaderboard.",
+    "lbNotPosted": "Score not posted to the leaderboard."
   },
   "en-GB": {
     "resetKeys": "Reset keys",
-    "pressKey": "press a key…"
+    "pressKey": "press a key…",
+    "lbPosting": "Posting score to the leaderboard…",
+    "lbRank": "Leaderboard rank: #{rank}",
+    "lbPosted": "Score posted to the leaderboard.",
+    "lbNotPosted": "Score not posted to the leaderboard."
   },
   "es-419": {
     "resetKeys": "Restablecer teclas",
-    "pressKey": "pulsa una tecla…"
+    "pressKey": "pulsa una tecla…",
+    "lbPosting": "Publicando la puntuación en la clasificación…",
+    "lbRank": "Puesto en la clasificación: #{rank}",
+    "lbPosted": "Puntuación publicada en la clasificación.",
+    "lbNotPosted": "La puntuación no se publicó en la clasificación."
   },
   "es-ES": {
     "resetKeys": "Restablecer teclas",
-    "pressKey": "pulsa una tecla…"
+    "pressKey": "pulsa una tecla…",
+    "lbPosting": "Publicando la puntuación en la clasificación…",
+    "lbRank": "Puesto en la clasificación: #{rank}",
+    "lbPosted": "Puntuación publicada en la clasificación.",
+    "lbNotPosted": "La puntuación no se ha publicado en la clasificación."
   },
   "de-DE": {
     "resetKeys": "Tasten zurücksetzen",
-    "pressKey": "Taste drücken …"
+    "pressKey": "Taste drücken …",
+    "lbPosting": "Punktzahl wird an die Bestenliste gesendet …",
+    "lbRank": "Platz in der Bestenliste: #{rank}",
+    "lbPosted": "Punktzahl in der Bestenliste eingetragen.",
+    "lbNotPosted": "Punktzahl nicht in der Bestenliste eingetragen."
   },
   "fr-FR": {
     "resetKeys": "Réinitialiser les touches",
-    "pressKey": "appuyez sur une touche…"
+    "pressKey": "appuyez sur une touche…",
+    "lbPosting": "Envoi du score au classement…",
+    "lbRank": "Rang au classement : #{rank}",
+    "lbPosted": "Score publié au classement.",
+    "lbNotPosted": "Score non publié au classement."
   },
   "fr-CA": {
     "resetKeys": "Réinitialiser les touches",
-    "pressKey": "appuyez sur une touche…"
+    "pressKey": "appuyez sur une touche…",
+    "lbPosting": "Envoi du pointage au classement…",
+    "lbRank": "Rang au classement : #{rank}",
+    "lbPosted": "Pointage publié au classement.",
+    "lbNotPosted": "Pointage non publié au classement."
   },
   "pt-BR": {
     "resetKeys": "Redefinir teclas",
-    "pressKey": "pressione uma tecla…"
+    "pressKey": "pressione uma tecla…",
+    "lbPosting": "Enviando a pontuação para o ranking…",
+    "lbRank": "Posição no ranking: #{rank}",
+    "lbPosted": "Pontuação enviada para o ranking.",
+    "lbNotPosted": "A pontuação não foi enviada para o ranking."
   },
   "it-IT": {
     "resetKeys": "Ripristina tasti",
-    "pressKey": "premi un tasto…"
+    "pressKey": "premi un tasto…",
+    "lbPosting": "Invio del punteggio alla classifica…",
+    "lbRank": "Posizione in classifica: #{rank}",
+    "lbPosted": "Punteggio pubblicato in classifica.",
+    "lbNotPosted": "Punteggio non pubblicato in classifica."
   }
 };
 for (const [loc, v] of Object.entries(EXTRA)) Object.assign(BASE[loc], v);

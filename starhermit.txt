@@ -2,7 +2,7 @@ name=Rhythm Steps
 description=Tap and hold notes in time with the music to build combos along a glowing concert causeway.
 launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
-server=server.js
+server=score-script.js
 version=1.0.0
 cover=cover.jpg
 
