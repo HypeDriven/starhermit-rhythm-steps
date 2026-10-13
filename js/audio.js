@@ -46,7 +46,7 @@ export class AudioEngine {
     for (const bus of ['music', 'effects', 'ambience', 'voice']) {
       const g = this.ctx.createGain();
       g.connect(master);
-      this.buses[bus] = g;
+      this.buses[bus] = (globalThis.GameOptions ? globalThis.GameOptions.tagBus(g, bus) : g);
     }
     this.applySettings(this.settings);
   }
@@ -73,7 +73,7 @@ export class AudioEngine {
   _blip(bus, { freq = 440, freqEnd = null, type = 'sine', dur = 0.08, gain = 0.3, at = 0, detune = 0 }) {
     if (!this.ctx) return;
     const t0 = this.ctx.currentTime + at;
-    const osc = this.ctx.createOscillator();
+    const osc = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createOscillator(), bus) : this.ctx.createOscillator());
     const g = this.ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
@@ -96,7 +96,7 @@ export class AudioEngine {
     // Seeded variants when recording matters (replay consistency).
     const rng = this._sfxVariantRng;
     for (let i = 0; i < len; i++) data[i] = rng ? rng.next() * 2 - 1 : Math.random() * 2 - 1;
-    const src = this.ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), bus) : this.ctx.createBufferSource());
     src.buffer = buf;
     const f = this.ctx.createBiquadFilter();
     f.type = type; f.frequency.value = filterFreq; f.Q.value = q;
@@ -130,7 +130,7 @@ export class AudioEngine {
   _playSample(name) {
     const e = this._sampleEntry(name);
     if (!e || !e.buffer) return false;
-    const src = this.ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), name) : this.ctx.createBufferSource());
     src.buffer = e.buffer;
     src.connect(this.buses.effects);
     src.start();
@@ -318,7 +318,7 @@ export class AudioEngine {
       last = (last + 0.02 * white) / 1.02;
       data[i] = last * 3.5;
     }
-    const src = this.ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), null) : this.ctx.createBufferSource());
     src.buffer = buf; src.loop = true;
     const f = this.ctx.createBiquadFilter();
     f.type = 'lowpass';
