@@ -120,6 +120,53 @@ export function writeSave(doc, storage = globalThis.localStorage) {
   }
 }
 
+// Merge two save docs (this device and the cloud copy another device wrote)
+// without losing progress on either side: the higher journey unlock, the
+// better stars/best score per stage and per daily date, the union of lessons,
+// achievements (earliest unlock), days played and seed-board entries, and the
+// larger lifetime stats and mastery XP. Settings and profile stay `local`'s
+// (the platform settings KV and account profile sync those).
+export function mergeSaves(local, remote) {
+  const a = local, b = remote;
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const out = JSON.parse(JSON.stringify(a));
+  const maxMap = (x = {}, y = {}) => { const o = { ...x }; for (const [k, v] of Object.entries(y)) o[k] = Math.max(num(o[k]), num(v)); return o; };
+  out.updatedAt = Math.max(num(a.updatedAt), num(b.updatedAt));
+  out.journey = {
+    unlocked: Math.max(num(a.journey?.unlocked), num(b.journey?.unlocked), 1),
+    stars: maxMap(a.journey?.stars, b.journey?.stars),
+    bestScores: maxMap(a.journey?.bestScores, b.journey?.bestScores),
+  };
+  const history = { ...(a.daily?.history || {}) };
+  for (const [d, r] of Object.entries(b.daily?.history || {})) if (!history[d] || num(r.score) > num(history[d].score)) history[d] = r;
+  const last = [a.daily?.lastPlayed, b.daily?.lastPlayed].filter(Boolean).sort().pop() || null;
+  out.daily = { ...(a.daily || {}), lastPlayed: last, history };
+  out.achievements = { ...(b.achievements || {}) };
+  for (const [k, v] of Object.entries(a.achievements || {})) out.achievements[k] = out.achievements[k] ? Math.min(num(out.achievements[k]) || num(v), num(v) || num(out.achievements[k])) : v;
+  out.lessons = { ...(b.lessons || {}), ...(a.lessons || {}) };
+  const xp = Math.max(num(a.mastery?.xp), num(b.mastery?.xp));
+  out.mastery = { xp, level: Math.floor(Math.sqrt(xp / 100)) + 1 };
+  const boards = { ...(a.chaseBoards || {}) };
+  for (const [seed, list] of Object.entries(b.chaseBoards || {})) {
+    const seen = new Set((boards[seed] || []).map((e) => e.sessionId));
+    boards[seed] = [...(boards[seed] || []), ...list.filter((e) => !seen.has(e.sessionId))]
+      .sort((x, y) => num(y.total ?? y.score) - num(x.total ?? x.score)).slice(0, 20);
+  }
+  out.chaseBoards = boards;
+  const sa = a.stats || {}, sb = b.stats || {};
+  out.stats = {
+    ...sb, ...sa,
+    sessionsPlayed: Math.max(num(sa.sessionsPlayed), num(sb.sessionsPlayed)),
+    totalScore: Math.max(num(sa.totalScore), num(sb.totalScore)),
+    bestCombo: Math.max(num(sa.bestCombo), num(sb.bestCombo)),
+    firstPlayDone: !!(sa.firstPlayDone || sb.firstPlayDone),
+    holdsCompleted: Math.max(num(sa.holdsCompleted), num(sb.holdsCompleted)),
+    earlyReleases: Math.max(num(sa.earlyReleases), num(sb.earlyReleases)),
+    daysPlayed: { ...(sb.daysPlayed || {}), ...(sa.daysPlayed || {}) },
+  };
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Achievements — small static set; stable lowercase keys; idempotent unlocks.
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
-// Localized strings for the Graphics settings section. The rest of the game
-// ships in English; the panel follows navigator.language.
+// Localized strings for the Graphics settings section, in the nine locales;
+// the panel follows the game language (js/i18n.js via ./lang.js).
+import { lang as gameLang } from './lang.js';
 
 const EN = {
   legend: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {tier})', renderScale: 'Render scale',
@@ -93,7 +94,7 @@ export function pickLocale(lang) {
   return FALLBACK_BY_LANG[lower.split('-')[0]] || 'en-US';
 }
 
-export function gfxStrings(lang = (typeof navigator !== 'undefined' ? navigator.language : 'en-US')) {
+export function gfxStrings(lang = gameLang()) {
   return GFX_STRINGS[pickLocale(lang)];
 }
 

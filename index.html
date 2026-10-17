@@ -11,6 +11,9 @@
 <script src="browser-guard.js"></script>
 <script src="ui-scale.js"></script>
 <script src="starhermit-sdk.js"></script>
+<script src="sh-language.js"></script>
+<script src="js/strings.js"></script>
+<script src="js/i18n.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#playfield">Skip to playfield</a>
@@ -44,17 +47,17 @@
 
     <!-- DOM lane controls: accessibility mirror of the canvas + touch targets -->
     <div id="lane-buttons" role="group" aria-label="Note lanes">
-      <button class="lane-btn" data-lane="0" aria-label="Lane 1 (D)"><span class="lane-key">D</span></button>
-      <button class="lane-btn" data-lane="1" aria-label="Lane 2 (F)"><span class="lane-key">F</span></button>
-      <button class="lane-btn" data-lane="2" aria-label="Lane 3 (J)"><span class="lane-key">J</span></button>
-      <button class="lane-btn" data-lane="3" aria-label="Lane 4 (K)"><span class="lane-key">K</span></button>
+      <button class="lane-btn" data-i18n-skip data-lane="0" aria-label="Lane 1 (D)"><span class="lane-key">D</span></button>
+      <button class="lane-btn" data-i18n-skip data-lane="1" aria-label="Lane 2 (F)"><span class="lane-key">F</span></button>
+      <button class="lane-btn" data-i18n-skip data-lane="2" aria-label="Lane 3 (J)"><span class="lane-key">J</span></button>
+      <button class="lane-btn" data-i18n-skip data-lane="3" aria-label="Lane 4 (K)"><span class="lane-key">K</span></button>
     </div>
   </main>
 
   <!-- ======== Title ======== -->
   <section id="screen-title" class="screen" aria-labelledby="title-h">
     <div class="panel title-panel">
-      <h1 id="title-h" class="game-logo">Rhythm <span>Steps</span></h1>
+      <h1 id="title-h" class="game-logo" data-i18n-skip>Rhythm <span>Steps</span></h1>
       <p class="tagline">A concert causeway made of light. Tap on beat, hold the glow, keep the streak.</p>
       <button id="btn-play" class="btn btn-primary btn-big">Play</button>
       <div class="title-grid">
@@ -69,9 +72,9 @@
         <button class="btn btn-ghost" data-nav="settings">Settings</button>
         <button class="btn btn-ghost" data-nav="help">Help</button>
         <button class="btn btn-ghost" data-nav="profile">Profile</button>
-        <button id="btn-invite" class="btn btn-ghost hidden">Invite a friend</button>
+        <button id="btn-invite" class="btn btn-ghost hidden" data-i18n-skip>Invite a friend</button>
       </div>
-      <button id="btn-signin" class="btn hidden">Sign in with StarHermit</button>
+      <button id="btn-signin" class="btn hidden" data-i18n-skip>Sign in with StarHermit</button>
       <p id="compat-note" class="compat-note hidden">3D graphics unavailable — running the simplified renderer. Your progress is unaffected.</p>
     </div>
   </section>
@@ -169,7 +172,7 @@
     <div class="panel">
       <div class="ls-col">
       <h2 id="results-h">Results</h2>
-      <div id="results-grade" class="grade-badge">S</div>
+      <div id="results-grade" class="grade-badge" data-i18n-skip>S</div>
       <p id="results-headline"></p>
       <table class="breakdown">
         <tbody>
@@ -201,7 +204,7 @@
       <h2 id="settings-h">Settings</h2>
       <div class="settings-cols">
         <fieldset id="settings-graphics" class="fieldset-wide">
-          <legend id="gfx-legend">Graphics</legend>
+          <legend id="gfx-legend" data-i18n-skip>Graphics</legend>
           <div id="gfx-controls" class="gfx-grid"></div>
           <div class="gfx-motion">
             <label class="check"><input type="checkbox" id="set-reduced-motion"> Reduced motion</label>

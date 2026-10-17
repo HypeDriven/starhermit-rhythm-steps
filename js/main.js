@@ -10,13 +10,14 @@ import * as ui from './ui.js';
 import * as platform from './platform.js';
 import {
   loadSave, writeSave, defaultSave, unlockAchievement, awardMasteryXp,
-  starsForResult, markPlayedToday, ACHIEVEMENTS, parseSaveDoc, DEFAULT_SETTINGS,
+  starsForResult, markPlayedToday, ACHIEVEMENTS, parseSaveDoc, DEFAULT_SETTINGS, mergeSaves,
 } from './persistence.js';
 import {
   journeyChart, JOURNEY_STAGES, dailyChart, practiceChart, challengeChart,
-  scoreChaseChart, lessonChart, LESSONS, getTheme, CVD_PALETTE, CHALLENGES,
+  scoreChaseChart, lessonChart, LESSONS, getTheme, CVD_PALETTE, CHALLENGES, PRACTICE_DIFFICULTIES,
 } from './content.js';
 import { compareResults, chaseEntry } from './rules.js';
+import { T, N, onLanguage } from './lang.js';
 
 // Game-state model: boot → title → profile-ready → mode-select → preparing →
 // tutorial/countdown → active ↔ paused → resolving → results → progression.
@@ -100,8 +101,8 @@ function applyHostedProfile(name) {
   return true;
 }
 
-// Hosted start-up, in order: cloud mirror (the remote doc wins when it is at
-// least as new as the local cache; a newer local doc is pushed back up), then
+// Hosted start-up, in order: cloud mirror (merged with the local cache —
+// mergeSaves keeps the best of both — and the merge pushed back up), then
 // the per-player settings KV (platform wins), then keyboard bindings.
 // localStorage remains the offline cache throughout. Standalone this only
 // resolves the local bindings (no network).
@@ -113,14 +114,20 @@ async function initHosted() {
     const profile = platform.loadProfile().catch(() => null);
     const r = await platform.cloudLoad();
     const remote = r.ok && r.doc ? parseSaveDoc(r.doc) : null;
-    const useRemote = remote && (remote.updatedAt || 0) >= (save.updatedAt || 0);
-    if (useRemote) {
-      save = remote;
-      normalizeKeys(save.settings);
-    }
+    const before = remote ? JSON.stringify(remote) : null;
+    if (remote) save = mergeSaves(save, remote);
     const renamed = applyHostedProfile(await profile);
     writeSave(save);
-    if (!useRemote || renamed) platform.scheduleCloudPush(save); // empty slot, newer local doc, or a new account name
+    // Empty slot, progress the cloud copy lacked, or a new account name: push.
+    if (!remote || renamed || JSON.stringify({ ...save, updatedAt: 0, checksum: 0 }) !== JSON.stringify({ ...JSON.parse(before), updatedAt: 0, checksum: 0 })) platform.scheduleCloudPush(save);
+    // Another device saved since our load: merge its progress in and save again.
+    platform.onConflict((doc) => {
+      const other = doc ? parseSaveDoc(doc) : null;
+      if (other) save = mergeSaves(save, other);
+      writeSave(save);
+      if (!document.getElementById('screen-title').classList.contains('hidden')) ui.relabel(); // refresh title statuses
+      return save;
+    });
     if (await platform.loadSettings(save.settings, DEFAULT_SETTINGS)) writeSave(save);
   }
   await platform.loadBindings(save.settings.keys);
@@ -153,7 +160,7 @@ function createRenderer() {
     seed: currentChart ? currentChart.seed : 1,
     onLaneInput: handleLanePointer,
     onContextLost: () => {
-      ui.toast('Graphics context lost — rebuilding…');
+      ui.toast(T('Graphics context lost — rebuilding…'));
       setTimeout(() => { createRenderer(); }, 250); // GPU resources rebuilt from retained descriptors
     },
   };
@@ -264,10 +271,10 @@ const controller = {
   pauseKeys: () => platform.getBindings().pause || ['Escape'],
 
   updateProfile({ displayName }) {
-    if (save.profile.accountLinked) { ui.toast('Name comes from your StarHermit account'); return; }
+    if (save.profile.accountLinked) { ui.toast(T('Name comes from your StarHermit account')); return; }
     save.profile.displayName = displayName;
     persistSave();
-    ui.toast('Profile updated');
+    ui.toast(T('Profile updated'));
   },
 
   resetSave() {
@@ -278,7 +285,7 @@ const controller = {
     ui.refreshSettingsPanel();
     buildGraphicsPanel();
     ui.setLaneKeyLabels(save.settings.keys);
-    ui.toast('Progress reset');
+    ui.toast(T('Progress reset'));
     ui.showScreen('title');
   },
 
@@ -310,9 +317,9 @@ const controller = {
     const s = JOURNEY_STAGES[index];
     pendingSetup = { chart, mode: 'journey', context: { stageIndex: index }, opts: {} };
     ui.showSetup({
-      title: `Stage ${index + 1}: ${s.name}`,
-      description: `${s.mastery ? 'Mastery stage. ' : ''}Mechanics: ${s.mechanics.join(', ')}.`,
-      rules: setupRules(chart, s.goals?.minAccuracy ? `Hold accuracy ≥ ${Math.round(s.goals.minAccuracy * 100)}%.` : null),
+      title: () => T('Stage {n}: {name}', { n: index + 1, name: T(s.name) }),
+      description: () => (s.mastery ? T('Mastery stage.') + ' ' : '') + T('Mechanics: {list}.', { list: s.mechanics.map((m) => T(MECHANIC_NAMES[m] || m)).join(', ') }),
+      rules: setupRules(chart, s.goals?.minAccuracy ? () => T('Hold accuracy ≥ {n}%.', { n: Math.round(s.goals.minAccuracy * 100) }) : null),
       durationMs: chart.durationMs,
       ranked: false,
       assists: assistSummary(),
@@ -324,9 +331,9 @@ const controller = {
     const chart = dailyChart(today);
     pendingSetup = { chart, mode: 'daily', context: { date: today }, opts: {} };
     ui.showSetup({
-      title: `Daily — ${today}`,
-      description: 'One shared seed and ruleset for everyone, per UTC day. Your best score is recorded and cloud-synced.',
-      rules: setupRules(chart, 'The platform board is read-only; your personal best is kept in your save.'),
+      title: () => chartTitle('daily', { date: today }),
+      description: () => T('One shared seed and ruleset for everyone, per UTC day. Your best score is recorded and cloud-synced.'),
+      rules: setupRules(chart, () => T('The platform board is read-only; your personal best is kept in your save.')),
       durationMs: chart.durationMs,
       ranked: false,
       assists: assistSummary(true),
@@ -337,8 +344,8 @@ const controller = {
     const chart = practiceChart(difficultyKey, null, themeKey || 'neon-causeway');
     pendingSetup = { chart, mode: 'practice', context: { difficultyKey }, opts: {} };
     ui.showSetup({
-      title: chart.displayName,
-      description: 'Unranked practice. No effect on ratings; restart freely.',
+      title: () => chartTitle('practice', { difficultyKey }),
+      description: () => T('Unranked practice. No effect on ratings; restart freely.'),
       rules: setupRules(chart, null),
       durationMs: chart.durationMs,
       ranked: false,
@@ -352,9 +359,9 @@ const controller = {
     const opts = { failEnabled: !!c.modifiers.failEnabled };
     pendingSetup = { chart, mode: 'challenge', context: { challengeKey: key }, opts };
     ui.showSetup({
-      title: `Challenge — ${c.name}`,
-      description: c.description,
-      rules: setupRules(chart, c.modifiers.failEnabled ? 'Health is on: misses and stray taps drain it. Zero health ends the run.' : null),
+      title: () => chartTitle('challenge', { challengeKey: key }),
+      description: () => T(c.description),
+      rules: setupRules(chart, c.modifiers.failEnabled ? () => T('Health is on: misses and stray taps drain it. Zero health ends the run.') : null),
       durationMs: chart.durationMs,
       ranked: false,
       assists: assistSummary(),
@@ -365,9 +372,9 @@ const controller = {
     const chart = scoreChaseChart(seed, difficultyKey);
     pendingSetup = { chart, mode: 'chase', context: { seed, difficultyKey }, opts: {} };
     ui.showSetup({
-      title: chart.displayName,
-      description: `Seed ${seed}. Anyone with this seed plays the identical chart.`,
-      rules: setupRules(chart, 'Scores for this seed stay on your local and cloud-saved board.'),
+      title: () => chartTitle('chase', { difficultyKey }),
+      description: () => T('Seed {seed}. Anyone with this seed plays the identical chart.', { seed }),
+      rules: setupRules(chart, () => T('Scores for this seed stay on your local and cloud-saved board.')),
       durationMs: chart.durationMs,
       ranked: false,
       assists: assistSummary(true),
@@ -411,23 +418,37 @@ const controller = {
   },
 };
 
+// Setup rules are a function so the setup screen re-renders in a new language.
 function setupRules(chart, extra) {
-  const rules = [
-    `${chart.notes.length} notes at ${chart.bpm} BPM across 4 lanes.`,
-    'Tap notes on the line; hold long notes head-to-tail.',
-    'Grades: Perfect ±45ms, Great ±90ms, Good ±135ms.',
-    'Combo raises the score bonus; a miss resets it.',
-  ];
-  if (chart.goals?.minAccuracy) rules.push(`Goal: accuracy ≥ ${Math.round(chart.goals.minAccuracy * 100)}%.`);
-  if (chart.goals?.scoreTarget) rules.push(`Goal: score ≥ ${chart.goals.scoreTarget.toLocaleString()}.`);
-  if (extra) rules.push(extra);
-  return rules;
+  return () => {
+    const rules = [
+      T('{notes} notes at {bpm} BPM across 4 lanes.', { notes: chart.notes.length, bpm: chart.bpm }),
+      T('Tap notes on the line; hold long notes head-to-tail.'),
+      T('Grades: Perfect ±45ms, Great ±90ms, Good ±135ms.'),
+      T('Combo raises the score bonus; a miss resets it.'),
+    ];
+    if (chart.goals?.minAccuracy) rules.push(T('Goal: accuracy ≥ {n}%.', { n: Math.round(chart.goals.minAccuracy * 100) }));
+    if (chart.goals?.scoreTarget) rules.push(T('Goal: score ≥ {n}.', { n: chart.goals.scoreTarget.toLocaleString() }));
+    if (extra) rules.push(typeof extra === 'function' ? extra() : extra);
+    return rules;
+  };
 }
 
 function assistSummary(rankedMode = false) {
-  const a = save.settings.timingAssist;
-  if (a === 'wide') return 'Wide timing windows (kept off competitive boards)';
-  return 'None';
+  return () => (save.settings.timingAssist === 'wide' ? T('Wide timing windows (kept off competitive boards)') : T('None'));
+}
+
+const MECHANIC_NAMES = { tap: N('tap'), hold: N('hold'), chord: N('chord'), stream: N('stream') };
+// The player-facing title of a chart (content.js names stay English keys).
+function chartTitle(mode, context) {
+  const level = (key) => { const d = PRACTICE_DIFFICULTIES.find((x) => x.key === key); return d ? T(d.label) : key; };
+  if (mode === 'journey') return T(JOURNEY_STAGES[context.stageIndex].name);
+  if (mode === 'daily') return T('Daily — {date}', { date: context.date });
+  if (mode === 'practice') return T('Practice — {level}', { level: level(context.difficultyKey) });
+  if (mode === 'challenge') { const c = CHALLENGES.find((x) => x.key === context.challengeKey); return T('Challenge — {name}', { name: c ? T(c.name) : '' }); }
+  if (mode === 'chase') return T('Score Chase — {level}', { level: level(context.difficultyKey) });
+  if (mode === 'learn') { const l = LESSONS.find((x) => x.id === context.lessonId); return l ? T(l.title) : ''; }
+  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -444,12 +465,13 @@ function beginSession(chart, mode, context, opts = {}) {
   renderer.setTheme(getTheme(save.settings.themeOverride || chart.theme), !!save.settings.cvdPalette);
   ui.showPlayfield();
   renderer.resize(); // playfield was hidden at creation; size it now that it's visible
-  ui.setObjective(objectiveFor(chart, mode, context));
-  ui.announce(`${chart.displayName}. Get ready.`);
+  ui.setObjective(() => objectiveFor(chart, mode, context));
+  ui.announce(T('{title}. Get ready.', { title: chartTitle(mode, context) }));
 
   if (mode === 'learn' && opts.lesson) {
     lessonState = { lesson: opts.lesson, stepIndex: 0, count: 0 };
-    ui.lessonStep(opts.lesson.steps[0].text, lessonProgressText());
+    const text = opts.lesson.steps[0].text;
+    ui.lessonStep(() => T(text), lessonProgressText());
     platform.telemetry('tutorial-step', { step: 0 });
   } else {
     lessonState = null;
@@ -472,7 +494,7 @@ function beginSession(chart, mode, context, opts = {}) {
   countdownTimer = setInterval(() => {
     n--;
     if (n > 0) { ui.countdown(String(n)); audio.playCountdown(n); }
-    else if (n === 0) { ui.countdown('GO'); audio.playCountdown(0); }
+    else if (n === 0) { ui.countdown(T('GO')); audio.playCountdown(0); }
     else {
       clearInterval(countdownTimer);
       countdownTimer = null;
@@ -488,13 +510,13 @@ function beginSession(chart, mode, context, opts = {}) {
 function objectiveFor(chart, mode, context) {
   if (mode === 'journey') {
     const g = chart.goals;
-    return g?.minAccuracy ? `Clear with ≥ ${Math.round(g.minAccuracy * 100)}% accuracy` : 'Finish the track';
+    return g?.minAccuracy ? T('Clear with ≥ {n}% accuracy', { n: Math.round(g.minAccuracy * 100) }) : T('Finish the track');
   }
-  if (mode === 'daily') return 'Daily ranked run — one shot counts';
-  if (mode === 'challenge') return chart.challenge?.description || 'Complete the challenge';
-  if (mode === 'learn') return 'Follow the lesson';
-  if (mode === 'chase') return 'Set the score for this seed';
-  return 'Practice run';
+  if (mode === 'daily') return T('Daily ranked run — one shot counts');
+  if (mode === 'challenge') return chart.challenge?.description ? T(chart.challenge.description) : T('Complete the challenge');
+  if (mode === 'learn') return T('Follow the lesson');
+  if (mode === 'chase') return T('Set the score for this seed');
+  return T('Practice run');
 }
 
 function teardownSession() {
@@ -524,20 +546,20 @@ function handleSessionEvent(evt) {
       lessonProgress('hit');
       break;
     case 'hold-complete':
-      ui.judgment('perfect', 'hold');
+      ui.judgment('perfect', N('hold'));
       lessonProgress('hold-complete');
       save.stats.holdsCompleted = (save.stats.holdsCompleted || 0) + 1;
       break;
     case 'early-release':
       audio.playMiss();
-      ui.judgment('miss', 'early');
+      ui.judgment('miss', N('early'));
       save.stats.earlyReleases = (save.stats.earlyReleases || 0) + 1;
       break;
     case 'miss':
       audio.playMiss();
       ui.judgment('miss');
       haptic([30, 40, 30]);
-      ui.announce('Miss');
+      ui.announce(T('Miss'));
       break;
     case 'empty-hit':
       audio.playEmptyHit();
@@ -577,7 +599,7 @@ function lessonProgress(action) {
     lessonState.count = 0;
     platform.telemetry('tutorial-step', { step: lessonState.stepIndex });
     if (lessonState.stepIndex >= lesson.steps.length) {
-      ui.lessonStep('Lesson complete! Finish the track.', '');
+      ui.lessonStep(() => T('Lesson complete! Finish the track.'), '');
       save.lessons[lesson.id] = true;
       persistSave();
       setTimeout(() => ui.hideLesson(), 2200);
@@ -587,7 +609,7 @@ function lessonProgress(action) {
     audio.playUi('confirm');
   }
   const next = lesson.steps[Math.min(lessonState.stepIndex, lesson.steps.length - 1)];
-  ui.lessonStep(next.text, lessonProgressText());
+  ui.lessonStep(() => T(next.text), lessonProgressText());
 }
 
 // ---------------------------------------------------------------------------
@@ -623,7 +645,8 @@ function onTerminal(breakdown) {
   // Mastery XP: score-derived, plus completion bonus.
   const xp = Math.round(breakdown.total / 50) + (completed ? 25 : 0);
   const leveled = awardMasteryXp(save, xp);
-  const xpText = `+${xp} mastery XP${leveled ? ` — level ${save.mastery.level}!` : ''}`;
+  const newLevel = save.mastery.level;
+  const xpText = () => (leveled ? T('+{xp} mastery XP — level {level}!', { xp, level: newLevel }) : T('+{xp} mastery XP', { xp }));
 
   save.stats.sessionsPlayed++;
   save.stats.totalScore += breakdown.total;
@@ -638,13 +661,15 @@ function onTerminal(breakdown) {
       save.journey.stars[idx] = Math.max(save.journey.stars[idx] || 0, stars);
       save.journey.bestScores[idx] = Math.max(save.journey.bestScores[idx] || 0, breakdown.total);
       if (idx + 1 >= save.journey.unlocked) save.journey.unlocked = Math.min(JOURNEY_STAGES.length, idx + 2);
-      headline = `${currentChart.displayName} cleared — ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
+      const ctx = { ...currentContext };
+      headline = () => T('{title} cleared — {stars}', { title: chartTitle('journey', ctx), stars: '★'.repeat(stars) + '☆'.repeat(3 - stars) });
       canNext = idx + 1 < JOURNEY_STAGES.length;
       if (idx === JOURNEY_STAGES.length - 1) tryUnlock('summit-clear');
     } else {
+      const acc = (breakdown.accuracy * 100).toFixed(1);
       headline = completed && breakdown.accuracy < minAcc
-        ? `Accuracy ${(breakdown.accuracy * 100).toFixed(1)}% — goal is ${Math.round(minAcc * 100)}%`
-        : 'Track failed — try again';
+        ? () => T('Accuracy {n}% — goal is {goal}%', { n: acc, goal: Math.round(minAcc * 100) })
+        : () => T('Track failed — try again');
     }
   } else if (currentMode === 'daily') {
     const date = currentContext.date;
@@ -652,24 +677,24 @@ function onTerminal(breakdown) {
     if (completed && (!prev || breakdown.total > prev.score)) {
       save.daily.history[date] = { score: breakdown.total, grade: breakdown.grade };
     }
-    headline = completed ? 'Daily run complete' : 'Daily run ended';
-    detail = 'Personal best recorded in your save.';
+    headline = completed ? () => T('Daily run complete') : () => T('Daily run ended');
+    detail = () => T('Personal best recorded in your save.');
   } else if (currentMode === 'chase') {
     const key = `${currentContext.seed}`;
     const board = save.chaseBoards[key] || (save.chaseBoards[key] = []);
     board.push({ name: save.profile.displayName, score: breakdown.total, total: breakdown.total, grade: breakdown.grade, sessionId: breakdown.sessionId, terminalReason: breakdown.terminalReason, invalidActions: breakdown.invalidActions, elapsedMs: breakdown.elapsedMs });
     board.sort((a, b) => compareResults(chaseEntry(a), chaseEntry(b)));
     save.chaseBoards[key] = board.slice(0, 20);
-    headline = completed ? 'Score posted to your seed board' : 'Run ended';
+    headline = completed ? () => T('Score posted to your seed board') : () => T('Run ended');
   } else if (currentMode === 'challenge') {
     const goalMet = completed &&
       breakdown.accuracy >= (currentChart.goals?.minAccuracy || 0) &&
       breakdown.total >= (currentChart.goals?.scoreTarget || 0);
-    headline = goalMet ? 'Challenge complete!' : completed ? 'Finished — goal not met' : 'Challenge failed';
+    headline = goalMet ? () => T('Challenge complete!') : completed ? () => T('Finished — goal not met') : () => T('Challenge failed');
   } else if (currentMode === 'learn') {
-    headline = completed ? 'Lesson track complete' : 'Lesson ended';
+    headline = completed ? () => T('Lesson track complete') : () => T('Lesson ended');
   } else {
-    headline = completed ? 'Practice complete' : 'Practice ended';
+    headline = completed ? () => T('Practice complete') : () => T('Practice ended');
   }
 
   if (currentMode === 'learn' && currentContext.lessonId && completed) {
@@ -790,7 +815,7 @@ function pauseGame() {
   pressedKeys.clear();
   audio.stopMusic(); // solo simulation pauses; music restarts on resume at song position
   ui.showPause(true);
-  ui.announce('Paused');
+  ui.announce(T('Paused'));
 }
 
 function resumeGame() {
@@ -801,7 +826,7 @@ function resumeGame() {
   audio.startMusic(currentChart, { startAtMs: session.songTimeMs() });
   session.resume();
   phase = 'active';
-  ui.announce('Resumed');
+  ui.announce(T('Resumed'));
 }
 
 function bindViewportLifecycle() {
@@ -901,6 +926,12 @@ function renderTitleStatuses() {
 // Audio captions → visual cue line
 // ---------------------------------------------------------------------------
 audio.onCaption = (text) => ui.caption(text);
+
+// Language change (Settings → Language or the account preference arriving):
+// js/i18n.js re-applied the static markup; ui.relabel re-renders what code
+// wrote (title statuses, lists, setup, HUD objective, lesson text, results,
+// settings key list, help) in place without touching the run.
+onLanguage(() => { ui.relabel(); buildGraphicsPanel(); });
 
 boot();
 

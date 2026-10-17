@@ -6,8 +6,12 @@ import { JOURNEY_STAGES, CHALLENGES, PRACTICE_DIFFICULTIES, THEMES, LESSONS, dai
 import { ACHIEVEMENTS } from './persistence.js';
 import { isHosted, fetchGameInfo, fetchLeaderboard, keyLabel } from './platform.js';
 import { shText } from './sh-i18n.js';
+import { T, N } from './lang.js';
 
 export { shText };
+// Text arguments may be functions so they re-render in a new language.
+const txt = (v) => (typeof v === 'function' ? v() : v);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 import { compareResults, chaseEntry } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
@@ -50,7 +54,7 @@ export function initUI(controller) {
   $('btn-next').addEventListener('click', () => { ctl.uiSound('confirm'); ctl.nextStage(); });
   $('btn-chase-start').addEventListener('click', () => {
     const seed = parseInt($('chase-seed').value, 10);
-    if (!Number.isFinite(seed)) { toast('Enter a numeric seed'); ctl.uiSound('error'); return; }
+    if (!Number.isFinite(seed)) { toast(T('Enter a numeric seed')); ctl.uiSound('error'); return; }
     ctl.startChase(seed >>> 0, $('chase-difficulty').value);
   });
   $('btn-chase-random').addEventListener('click', () => {
@@ -61,12 +65,38 @@ export function initUI(controller) {
   $('chase-seed').addEventListener('input', () => renderChaseBoard());
   $('btn-replay-tutorial').addEventListener('click', () => ctl.openMode('learn'));
   $('btn-reset-save').addEventListener('click', () => {
-    if (confirm('Reset ALL local progress, settings, and achievements?')) ctl.resetSave();
+    if (confirm(T('Reset ALL local progress, settings, and achievements?'))) ctl.resetSave();
   });
   $('profile-name').addEventListener('change', () => {
-    ctl.updateProfile({ displayName: $('profile-name').value.slice(0, 24) || 'Guest' });
+    ctl.updateProfile({ displayName: $('profile-name').value.slice(0, 24) || T('Guest') });
   });
 
+  bindSettingsInputs();
+  buildSettingsPanel();
+  buildHelpCards();
+}
+
+/** Language changed: re-render everything written from code, in place. */
+export function relabel() {
+  if (!ctl) return;
+  $('btn-signin').textContent = shText('signIn');
+  $('btn-invite').textContent = shText('invite');
+  renderTitle();
+  for (const [name, fn] of [['journey', renderJourney], ['practice', renderPractice], ['challenge', renderChallenges],
+    ['learn', renderLessons], ['chase', renderChase], ['profile', renderProfile]]) {
+    if (!$(`screen-${name}`).classList.contains('hidden')) fn();
+  }
+  const themeSel = $('practice-theme');
+  for (const o of themeSel.options) o.textContent = T(THEMES[o.value].name);
+  const diffSel = $('chase-difficulty');
+  for (const o of diffSel.options) o.textContent = T(PRACTICE_DIFFICULTIES.find((d) => d.key === o.value).label);
+  if (lastSetup) renderSetup(lastSetup);
+  if (lastObjective != null) setObjective(lastObjective);
+  if (lastLesson) lessonStep(...lastLesson, true);
+  if (lastResults) renderResults(...lastResults);
+  renderLeaderboardLine();
+  if (lastSync) setSyncStatus(lastSync);
+  setLaneKeyLabels(ctl.getSave().settings.keys);
   buildSettingsPanel();
   buildHelpCards();
 }
@@ -158,9 +188,9 @@ function renderTitle() {
   const save = ctl.getSave();
   const total = JOURNEY_STAGES.length;
   const unlocked = save.journey.unlocked;
-  $('title-journey-status').textContent = `Stage ${Math.min(unlocked, total)}/${total}`;
+  $('title-journey-status').textContent = T('Stage {n}/{total}', { n: Math.min(unlocked, total), total });
   const today = ctl.utcToday();
-  $('title-daily-status').textContent = save.daily.history[today] ? `Done — ${save.daily.history[today].grade}` : 'Not played';
+  $('title-daily-status').textContent = save.daily.history[today] ? T('Done — {grade}', { grade: save.daily.history[today].grade }) : T('Not played');
   $('compat-note').classList.toggle('hidden', !ctl.usingFallbackRenderer());
 }
 
@@ -174,9 +204,10 @@ function renderJourney() {
     btn.className = 'stage-btn' + (s.mastery ? ' mastery' : '') + (locked ? ' locked' : '');
     btn.disabled = locked;
     const stars = save.journey.stars[i] || 0;
-    btn.innerHTML = `<strong>${i + 1}</strong><small>${s.name}</small><span class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>`;
+    btn.innerHTML = `<strong>${i + 1}</strong><small>${esc(T(s.name))}</small><span class="stars">${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>`;
     btn.setAttribute('role', 'listitem');
-    btn.setAttribute('aria-label', locked ? `Stage ${i + 1}, locked` : `Stage ${i + 1}: ${s.name}, ${stars} of 3 stars${s.mastery ? ', mastery stage' : ''}`);
+    btn.setAttribute('aria-label', locked ? T('Stage {n}, locked', { n: i + 1 })
+      : T(s.mastery ? 'Stage {n}: {name}, {stars} of 3 stars, mastery stage' : 'Stage {n}: {name}, {stars} of 3 stars', { n: i + 1, name: T(s.name), stars }));
     if (!locked) btn.addEventListener('click', () => { ctl.uiSound('confirm'); ctl.startJourneyStage(i); });
     grid.appendChild(btn);
   });
@@ -188,7 +219,7 @@ function renderPractice() {
   PRACTICE_DIFFICULTIES.forEach((d) => {
     const btn = document.createElement('button');
     btn.className = 'btn';
-    btn.textContent = `${d.label} — ${d.params.bpm} BPM`;
+    btn.textContent = T('{level} — {bpm} BPM', { level: T(d.label), bpm: d.params.bpm });
     btn.setAttribute('role', 'radio');
     btn.addEventListener('click', () => { ctl.uiSound('confirm'); ctl.startPractice(d.key, $('practice-theme').value); });
     list.appendChild(btn);
@@ -197,7 +228,7 @@ function renderPractice() {
   if (!themeSel.options.length) {
     for (const [key, t] of Object.entries(THEMES)) {
       const o = document.createElement('option');
-      o.value = key; o.textContent = t.name;
+      o.value = key; o.textContent = T(t.name);
       themeSel.appendChild(o);
     }
   }
@@ -209,7 +240,7 @@ function renderChallenges() {
   for (const c of CHALLENGES) {
     const btn = document.createElement('button');
     btn.className = 'btn';
-    btn.innerHTML = `<strong>${c.name}</strong><br><small class="muted">${c.description}</small>`;
+    btn.innerHTML = `<strong>${esc(T(c.name))}</strong><br><small class="muted">${esc(T(c.description))}</small>`;
     btn.addEventListener('click', () => { ctl.uiSound('confirm'); ctl.startChallenge(c.key); });
     list.appendChild(btn);
   }
@@ -223,7 +254,7 @@ function renderLessons() {
     const done = !!save.lessons[l.id];
     const btn = document.createElement('button');
     btn.className = 'btn';
-    btn.innerHTML = `<strong>${l.title}</strong> ${done ? '✓' : ''}`;
+    btn.innerHTML = `<strong>${esc(T(l.title))}</strong> ${done ? '✓' : ''}`;
     btn.addEventListener('click', () => { ctl.uiSound('confirm'); ctl.startLesson(l.id); });
     list.appendChild(btn);
   }
@@ -234,7 +265,7 @@ function renderChase() {
   if (!sel.options.length) {
     for (const d of PRACTICE_DIFFICULTIES) {
       const o = document.createElement('option');
-      o.value = d.key; o.textContent = d.label;
+      o.value = d.key; o.textContent = T(d.label);
       sel.appendChild(o);
     }
     sel.value = 'brisk';
@@ -278,13 +309,13 @@ export function renderChaseBoard(chartId = null) {
   const id = chartId || (Number.isFinite(typed) ? String(typed >>> 0) : $('chase-seed').value);
   const entries = (save.chaseBoards[id] || []).slice().sort((a, b) => compareResults(chaseEntry(a), chaseEntry(b))).slice(0, 10);
   if (!entries.length) {
-    board.innerHTML = '<li class="muted">No local scores for this seed yet.</li>';
+    board.innerHTML = `<li class="muted">${esc(T('No local scores for this seed yet.'))}</li>`;
     return;
   }
   for (const e of entries) {
     const li = document.createElement('li');
     const score = e.total ?? e.score ?? 0;
-    li.textContent = `${e.name || 'Guest'} — ${score.toLocaleString()} (${e.grade || '—'})`;
+    li.textContent = `${e.name || T('Guest')} — ${score.toLocaleString()} (${e.grade || '—'})`;
     board.appendChild(li);
   }
 }
@@ -292,18 +323,18 @@ export function renderChaseBoard(chartId = null) {
 function renderProfile() {
   const save = ctl.getSave();
   const linked = !!save.profile.accountLinked;
-  $('profile-name').value = save.profile.displayName;
+  $('profile-name').value = save.profile.guest && save.profile.displayName === 'Guest' ? T('Guest') : save.profile.displayName;
   $('profile-name').disabled = linked;
   $('profile-name-note').textContent = linked
-    ? 'Name comes from your StarHermit account.'
-    : 'Local guest name, shown only on this device.';
-  $('profile-sync').textContent = isHosted() ? (SYNC_TEXT[lastSync] || SYNC_TEXT.connecting) : 'Local save only';
+    ? T('Name comes from your StarHermit account.')
+    : T('Local guest name, shown only on this device.');
+  $('profile-sync').textContent = isHosted() ? T(SYNC_TEXT[lastSync] || SYNC_TEXT.connecting) : T('Local save only');
   const av = $('profile-avatar');
   av.style.background = `hsl(${save.profile.avatarHue}, 70%, 55%)`;
   if (isHosted() && ctl.avatarUrl) {
     ctl.avatarUrl().then((url) => { if (url) av.style.background = `center / cover no-repeat url("${url}")`; });
   }
-  $('profile-mastery').textContent = `Level ${save.mastery.level} (${save.mastery.xp} XP)`;
+  $('profile-mastery').textContent = T('Level {level} ({xp} XP)', { level: save.mastery.level, xp: save.mastery.xp });
   $('profile-sessions').textContent = String(save.stats.sessionsPlayed);
   $('profile-combo').textContent = String(save.stats.bestCombo);
   $('profile-days').textContent = String(Object.keys(save.stats.daysPlayed || {}).length);
@@ -313,7 +344,7 @@ function renderProfile() {
     const li = document.createElement('li');
     const unlocked = !!save.achievements[a.key];
     li.className = unlocked ? '' : 'locked';
-    li.innerHTML = `<span><strong>${a.name}</strong> — ${a.description}</span><span>${unlocked ? '✓' : ''}</span>`;
+    li.innerHTML = `<span><strong>${esc(T(a.name))}</strong> — ${esc(T(a.description))}</span><span>${unlocked ? '✓' : ''}</span>`;
     ul.appendChild(li);
   }
 }
@@ -321,26 +352,33 @@ function renderProfile() {
 // ---------------------------------------------------------------------------
 // Setup screen
 // ---------------------------------------------------------------------------
-export function showSetup({ title, description, rules, durationMs, ranked, assists }) {
-  $('setup-h').textContent = title;
-  $('setup-desc').textContent = description;
+let lastSetup = null;
+export function showSetup(setup) {
+  renderSetup(setup);
+  showScreen('setup');
+}
+function renderSetup(setup) {
+  lastSetup = setup;
+  const { durationMs, ranked } = setup;
+  $('setup-h').textContent = txt(setup.title);
+  $('setup-desc').textContent = txt(setup.description);
   const ul = $('setup-rules');
   ul.innerHTML = '';
-  for (const r of rules) {
+  for (const r of txt(setup.rules)) {
     const li = document.createElement('li');
-    li.textContent = r;
+    li.textContent = txt(r);
     ul.appendChild(li);
   }
-  $('setup-duration').textContent = `~${Math.round(durationMs / 1000)}s`;
-  $('setup-ranked').textContent = ranked ? 'Yes' : 'No';
-  $('setup-assists').textContent = assists;
-  showScreen('setup');
+  $('setup-duration').textContent = `~${Math.round(durationMs / 1000)} s`;
+  $('setup-ranked').textContent = ranked ? T('Yes') : T('No');
+  $('setup-assists').textContent = txt(setup.assists);
 }
 
 // ---------------------------------------------------------------------------
 // HUD
 // ---------------------------------------------------------------------------
-export function setObjective(text) { $('hud-objective').textContent = text; }
+let lastObjective = null;
+export function setObjective(text) { lastObjective = text; $('hud-objective').textContent = txt(text); }
 
 export function updateHud(snap) {
   $('hud-score').textContent = snap.score.total.toLocaleString();
@@ -363,7 +401,7 @@ export function updateHud(snap) {
 let judgeTimer = null;
 export function judgment(grade, extra = '') {
   const el = $('judgment-pop');
-  el.textContent = grade === 'miss' ? 'Miss' : grade[0].toUpperCase() + grade.slice(1) + (extra ? ` ${extra}` : '');
+  el.textContent = T(GRADE_NAMES[grade] || grade) + (extra ? ` ${T(extra)}` : '');
   el.className = `show ${grade}`;
   clearTimeout(judgeTimer);
   judgeTimer = setTimeout(() => el.classList.remove('show'), 450);
@@ -383,14 +421,16 @@ export function caption(text) {
   el._t = setTimeout(() => { el.textContent = ''; }, 1800);
 }
 
-export function lessonStep(text, progress) {
+let lastLesson = null;
+export function lessonStep(text, progress, quiet = false) {
+  lastLesson = [text, progress];
   $('lesson-overlay').classList.remove('hidden');
-  $('lesson-text').textContent = text;
+  $('lesson-text').textContent = txt(text);
   $('lesson-progress').textContent = progress || '';
-  announce(text);
+  if (!quiet) announce(txt(text));
 }
 
-export function hideLesson() { $('lesson-overlay').classList.add('hidden'); }
+export function hideLesson() { lastLesson = null; $('lesson-overlay').classList.add('hidden'); }
 
 export function showPause(show) {
   $('overlay-pause').classList.toggle('hidden', !show);
@@ -410,50 +450,66 @@ export function setLaneKeyLabels(keys) {
   document.querySelectorAll('.lane-btn').forEach((btn) => {
     const lane = parseInt(btn.dataset.lane, 10);
     btn.querySelector('.lane-key').textContent = keyLabel(keys[lane]);
-    btn.setAttribute('aria-label', `Lane ${lane + 1} (${keyLabel(keys[lane])})`);
+    btn.setAttribute('aria-label', T('Lane {n} ({key})', { n: lane + 1, key: keyLabel(keys[lane]) }));
   });
 }
 
 // ---------------------------------------------------------------------------
 // Results
 // ---------------------------------------------------------------------------
-export function showResults(breakdown, { headline, canNext, achievements = [], xpText = '', detail = '' }) {
+let lastResults = null;
+export function showResults(breakdown, opts) {
   showPlayfieldHiddenThen('results');
+  lbState = null;
+  $('res-lb').hidden = true;
+  renderResults(breakdown, opts);
+  announce(T('Results. Grade {grade}. Total {n} points. {headline}', { grade: breakdown.grade, n: breakdown.total, headline: txt(opts.headline) }));
+}
+function renderResults(breakdown, { headline, canNext, achievements = [], xpText = '', detail = '' }) {
+  lastResults = [breakdown, { headline, canNext, achievements, xpText, detail }];
   $('results-grade').textContent = breakdown.grade;
-  $('results-headline').textContent = headline;
+  $('results-headline').textContent = txt(headline);
   $('res-base').textContent = breakdown.base.toLocaleString();
   $('res-combo-bonus').textContent = breakdown.comboBonus.toLocaleString();
   $('res-hold').textContent = breakdown.holdBonus.toLocaleString();
   $('res-total').textContent = breakdown.total.toLocaleString();
   const c = breakdown.counts;
-  $('res-counts').innerHTML =
-    `<span>Perfect ${c.perfect}</span><span>Great ${c.great}</span><span>Good ${c.good}</span>` +
-    `<span>Miss ${c.miss}</span><span>Max combo ${breakdown.maxCombo}</span>` +
-    `<span>Accuracy ${(breakdown.accuracy * 100).toFixed(1)}%</span>`;
-  $('res-detail').textContent = detail;
+  $('res-counts').innerHTML = [
+    T('Perfect {n}', { n: c.perfect }), T('Great {n}', { n: c.great }), T('Good {n}', { n: c.good }),
+    T('Miss {n}', { n: c.miss }), T('Max combo {n}', { n: breakdown.maxCombo }),
+    T('Accuracy {n}%', { n: (breakdown.accuracy * 100).toFixed(1) }),
+  ].map((x) => `<span>${esc(x)}</span>`).join('');
+  $('res-detail').textContent = txt(detail);
   const achRow = $('res-achievements');
   achRow.innerHTML = '';
   for (const a of achievements) {
     const chip = document.createElement('span');
     chip.className = 'ach-chip';
-    chip.textContent = `🏆 ${a.name}`;
+    chip.textContent = `🏆 ${T(a.name)}`;
     achRow.appendChild(chip);
   }
-  $('res-xp').textContent = xpText;
-  $('res-lb').hidden = true;
+  $('res-xp').textContent = txt(xpText);
   $('btn-next').classList.toggle('hidden', !canNext);
-  announce(`Results. Grade ${breakdown.grade}. Total ${breakdown.total} points. ${headline}`);
 }
 
 /** Hosted: the results line for the StarHermit high-score board. */
+let lbState = null;
 export function showLeaderboardPosting(promise) {
-  const line = $('res-lb');
-  line.hidden = false;
-  line.textContent = shText('lbPosting');
+  const mine = lbState = { pending: true };
+  $('res-lb').hidden = false;
+  renderLeaderboardLine();
   promise.then((r) => {
-    line.textContent = !r.posted ? shText('lbNotPosted')
-      : r.rank ? shText('lbRank', { rank: r.rank }) : shText('lbPosted');
+    if (lbState !== mine) return;
+    lbState = r;
+    renderLeaderboardLine();
   });
+}
+function renderLeaderboardLine() {
+  const line = $('res-lb');
+  const r = lbState;
+  if (!r || line.hidden) return;
+  line.textContent = r.pending ? shText('lbPosting') : !r.posted ? shText('lbNotPosted')
+    : r.rank ? shText('lbRank', { rank: r.rank }) : shText('lbPosted');
 }
 
 function showPlayfieldHiddenThen(name) {
@@ -466,6 +522,25 @@ function showPlayfieldHiddenThen(name) {
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+// Settings inputs: listeners are attached once; buildSettingsPanel() only
+// syncs their values and rebuilds the key-binding list.
+const SETTING_INPUTS = [
+  ['set-vol-music', 'volMusic'], ['set-vol-effects', 'volEffects'], ['set-vol-ambience', 'volAmbience'], ['set-vol-voice', 'volVoice'],
+  ['set-muted', 'muted', true], ['set-reduced-motion', 'reducedMotion', true], ['set-camera-sway', 'cameraSway', true],
+  ['set-note-speed', 'noteSpeed'], ['set-high-contrast', 'highContrast', true], ['set-cvd', 'cvdPalette', true],
+  ['set-large-text', 'largeText', true], ['set-left-handed', 'leftHanded', true], ['set-captions', 'captions', true],
+  ['set-haptics', 'haptics', true], ['set-hold-mode', 'holdMode'], ['set-timing-assist', 'timingAssist'],
+  ['set-telemetry', 'telemetryConsent', true],
+];
+function bindSettingsInputs() {
+  for (const [id, key, isCheck] of SETTING_INPUTS) {
+    const el = $(id);
+    el.addEventListener(isCheck ? 'change' : 'input', () => {
+      ctl.applySetting(key, isCheck ? el.checked : (id === 'set-note-speed' ? parseFloat(el.value) : el.value));
+    });
+  }
+}
+
 function buildSettingsPanel() {
   const save = ctl.getSave();
   const s = save.settings;
@@ -473,9 +548,6 @@ function buildSettingsPanel() {
     const el = $(id);
     if (isCheck) el.checked = !!s[key];
     else el.value = s[key];
-    el.addEventListener(isCheck ? 'change' : 'input', () => {
-      ctl.applySetting(key, isCheck ? el.checked : (id === 'set-note-speed' ? parseFloat(el.value) : el.value));
-    });
   };
   bind('set-vol-music', 'volMusic'); bind('set-vol-effects', 'volEffects');
   bind('set-vol-ambience', 'volAmbience'); bind('set-vol-voice', 'volVoice');
@@ -499,7 +571,7 @@ function buildSettingsPanel() {
   s.keys.forEach((key, lane) => {
     const btn = document.createElement('button');
     btn.className = 'btn keybind-btn';
-    btn.innerHTML = `<span>Lane ${lane + 1}</span><kbd></kbd>`;
+    btn.innerHTML = `<span>${esc(T('Lane {n}', { n: lane + 1 }))}</span><kbd></kbd>`;
     btn.querySelector('kbd').textContent = keyLabel(key);
     btn.addEventListener('click', () => {
       btn.querySelector('kbd').textContent = shText('pressKey');
@@ -531,20 +603,21 @@ export function refreshSettingsPanel() { buildSettingsPanel(); }
 function buildHelpCards() {
   const s = ctl.getSave().settings;
   const keys = s.keys.map((k) => keyLabel(k));
+  const kbd = (k) => `<kbd>${esc(k)}</kbd>`;
   const cards = [
-    { title: 'Tap notes', body: `Notes descend toward the glowing line. Press the lane when the note touches it. Keys: ${keys.map((k, i) => `<kbd>${k}</kbd>`).join(' ')} or tap the lane buttons.`, demo: ['tap'] },
-    { title: 'Hold notes', body: `Long glowing bars must be held from head to tail, then released. Releasing early breaks your combo. Hold style: ${s.holdMode}.`, demo: ['hold'] },
-    { title: 'Timing grades', body: 'Perfect ±45ms, Great ±90ms, Good ±135ms. Later than that is a miss and resets your combo.', demo: [] },
-    { title: 'Combo & score', body: 'Score = notes + combo bonus + hold bonus. Every 10 combo raises the per-note bonus. Results always show the full breakdown.', demo: [] },
-    { title: 'Pause', body: `Press <kbd>${keyLabel((ctl.pauseKeys && ctl.pauseKeys()[0]) || 'Escape')}</kbd> or the ⏸ button to pause. Backgrounding the tab pauses automatically.`, demo: [] },
-    { title: 'Keyboard & gamepad', body: 'Menus: arrows + Enter to confirm, Escape to go back. Gamepad: D-pad or face buttons hit lanes, Start pauses.', demo: [] },
+    { title: T('Tap notes'), body: esc(T('Notes descend toward the glowing line. Press the lane when the note touches it. Keys: {keys} or tap the lane buttons.', { keys: '\u0000' })).replace('\u0000', keys.map(kbd).join(' ')), demo: ['tap'] },
+    { title: T('Hold notes'), body: esc(T('Long glowing bars must be held from head to tail, then released. Releasing early breaks your combo. Hold style: {style}.', { style: T(s.holdMode === 'toggle' ? 'Toggle' : 'Hold') })), demo: ['hold'] },
+    { title: T('Timing grades'), body: esc(T('Perfect ±45ms, Great ±90ms, Good ±135ms. Later than that is a miss and resets your combo.')), demo: [] },
+    { title: T('Combo & score'), body: esc(T('Score = notes + combo bonus + hold bonus. Every 10 combo raises the per-note bonus. Results always show the full breakdown.')), demo: [] },
+    { title: T('Pause'), body: esc(T('Press {key} or the ⏸ button to pause. Backgrounding the tab pauses automatically.', { key: '\u0000' })).replace('\u0000', kbd(keyLabel((ctl.pauseKeys && ctl.pauseKeys()[0]) || 'Escape'))), demo: [] },
+    { title: T('Keyboard & gamepad'), body: esc(T('Menus: arrows + Enter to confirm, Escape to go back. Gamepad: D-pad or face buttons hit lanes, Start pauses.')), demo: [] },
   ];
   const host = $('help-cards');
   host.innerHTML = '';
   for (const c of cards) {
     const div = document.createElement('div');
     div.className = 'help-card';
-    div.innerHTML = `<h3>${c.title}</h3><p>${c.body}</p>` +
+    div.innerHTML = `<h3>${esc(c.title)}</h3><p>${c.body}</p>` +
       (c.demo.length ? `<div class="demo-row">${c.demo.map((d) => `<span class="demo-note ${d}"></span>`).join('')}</div>` : '');
     host.appendChild(div);
   }
@@ -556,12 +629,13 @@ export function refreshHelpCards() { buildHelpCards(); }
 // Toasts + announcements
 // ---------------------------------------------------------------------------
 const SYNC_TEXT = {
-  connecting: 'Connecting…',
-  saving: 'Saving…',
-  synced: 'Synced',
-  offline: 'Offline — local save',
-  error: 'Sync error — will retry',
+  connecting: N('Connecting…'),
+  saving: N('Saving…'),
+  synced: N('Synced'),
+  offline: N('Offline — local save'),
+  error: N('Sync error — will retry'),
 };
+const GRADE_NAMES = { perfect: N('Perfect'), great: N('Great'), good: N('Good'), miss: N('Miss') };
 
 // Cloud mirror status, surfaced on the profile screen.
 // StarHermit account chrome on the title: sign-in when possible, invite when signed in.
@@ -575,13 +649,13 @@ let lastSync = null; // the profile screen re-renders with the latest status, no
 export function setSyncStatus(status) {
   lastSync = status;
   const el = $('profile-sync');
-  if (el) el.textContent = SYNC_TEXT[status] || String(status);
+  if (el) el.textContent = SYNC_TEXT[status] ? T(SYNC_TEXT[status]) : String(status);
 }
 
 export function toast(msg, ms = 2600) {
   const el = document.createElement('div');
   el.className = 'toast';
-  el.textContent = msg;
+  el.textContent = txt(msg);
   $('toast-host').appendChild(el);
   setTimeout(() => el.remove(), ms);
 }

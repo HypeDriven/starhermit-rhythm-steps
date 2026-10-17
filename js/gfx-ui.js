@@ -42,6 +42,8 @@ function field(labelText, control, cls = 'field') {
 
 export function buildGraphicsPanel() {
   if (!ctl) return;
+  T = gfxStrings(); // the game language may have changed since the last build
+  $('gfx-legend').textContent = T.legend;
   const host = $('gfx-controls');
   host.innerHTML = '';
   const saved = ctl.getGfx() || {};

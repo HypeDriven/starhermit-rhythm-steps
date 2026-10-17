@@ -12,6 +12,7 @@
 // share link. There is no per-game time/presence/telemetry route for launch
 // tokens; personal bests also stay in the cloud-saved document.
 
+import { T } from './lang.js';
 const SH = () => globalThis.StarHermit || null;
 
 const state = {
@@ -33,6 +34,7 @@ export function detectHost() {
   if (!lifecycleBound) {
     lifecycleBound = true;
     sh.on('saved', (ok) => reportSync(ok ? 'synced' : 'error'));
+    sh.on('saveconflict', () => { resolveConflict(); });
     if (typeof window !== 'undefined') {
       window.addEventListener('pagehide', () => flushCloud());
       document.addEventListener('visibilitychange', () => { if (document.hidden) flushCloud(); });
@@ -67,7 +69,7 @@ export async function nicknameFor(userId) {
   const sh = SH();
   const id = String(userId);
   const p = sh ? await sh.profile(id).catch(() => null) : null;
-  return (p ? p.displayName : `Player ${id.slice(0, 8)}`).slice(0, 24);
+  return (p ? p.displayName : T('Player {id}', { id: id.slice(0, 8) })).slice(0, 24);
 }
 // Load the signed-in player's display name; null when standalone.
 export async function loadProfile() {
@@ -81,8 +83,11 @@ export async function avatarUrl() {
 }
 
 // ---------------------------------------------------------------------------
-// Cloud save: the SDK slot (game:<slug>), remote-preferred on load, debounced
-// pushes with a pagehide flush. localStorage stays the offline cache.
+// Cloud save: the SDK slot (game:<slug>), merged with the local save on load
+// (main.js), debounced pushes with a pagehide flush. Writes after a load are
+// conditional (ETag): when another device saved first the SDK emits
+// 'saveconflict'; the slot is reloaded, merged (onConflict) and saved again.
+// localStorage stays the offline cache.
 // ---------------------------------------------------------------------------
 export function setSyncStatusHandler(fn) { syncHandler = fn; }
 function reportSync(status) {
@@ -96,6 +101,17 @@ export async function cloudLoad() {
   const doc = await SH().loadJSON();
   reportSync('synced');
   return doc ? { ok: true, doc } : { ok: true, none: true };
+}
+let conflictMerge = null;
+/** merge(remoteDoc) → the merged doc to save, called when another device saved first. */
+export function onConflict(merge) { conflictMerge = merge; }
+export async function resolveConflict() {
+  const sh = SH();
+  if (!isHosted()) return;
+  reportSync('saving');
+  const doc = await sh.loadJSON();
+  const merged = conflictMerge ? conflictMerge(doc) : null;
+  if (merged && !sh.saveConflicted()) sh.saveJSON(merged, 0);
 }
 // Debounced mirror of the local save doc. Call after every persisted write.
 export function scheduleCloudPush(doc) {
@@ -234,7 +250,7 @@ export async function fetchLeaderboard(boardId, { friendsOnly = false, page = 1,
   const entries = [];
   for (const e of raw.slice(0, pageSize)) {
     const uid = e.userId ?? e.user_id ?? null;
-    const name = uid != null ? await nicknameFor(String(uid)) : (typeof e.nickname === 'string' ? e.nickname : 'Player');
+    const name = uid != null ? await nicknameFor(String(uid)) : (typeof e.nickname === 'string' ? e.nickname : T('Player'));
     entries.push({ name, score: Number(e.score ?? e.total ?? e.value ?? 0), rank: e.rank });
   }
   return { ok: true, entries };

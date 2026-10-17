@@ -15,9 +15,11 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { stubStarHermit, launchToken } from './starhermit-e2e.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SHOT = (stage, tag) => `/tmp/rhythm-steps-e2e-${stage}-${tag}.png`;
+// Screenshots go to $E2E_SHOT_DIR (default /tmp).
+const SHOT = (stage, tag) => join(process.env.E2E_SHOT_DIR || '/tmp', `rhythm-steps-e2e-${stage}-${tag}.png`);
 const LANE_KEYS = ['d', 'f', 'j', 'k'];
 
 // Benign GPU/swiftshader noise (from tools/production_game_audit.mjs).
@@ -320,6 +322,93 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
   }
 }
 
+// Language (signed in via a stubbed StarHermit API): Automatic follows the
+// account's preferred language (fr-CA); choosing Italian in Settings opened
+// from the pause menu re-renders Settings, the pause menu and the HUD without
+// ending the track; ui.language is saved and Report a problem posts a bug.
+async function languagePass(browser, { tag, viewport, hasTouch }) {
+  const context = await browser.newContext({ viewport, hasTouch });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`); });
+  const step = async (name, fn) => { await fn(); console.log(`ok - [${tag}] ${name}`); };
+  const text = async (sel) => (await page.locator(sel).first().textContent()).trim();
+  try {
+    const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+    await step('language: Automatic follows the account language (fr-CA)', async () => {
+      await page.goto('about:blank');
+      await page.goto(`http://127.0.0.1:${port}/index.html#game_token=${launchToken()}`, { waitUntil: 'load' });
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      await page.waitForSelector('#screen-title:not(.hidden)', { timeout: 10000 });
+      if (await text('#btn-play') !== 'Jouer') throw new Error('title not in French: ' + await text('#btn-play'));
+    });
+    await step('language: Italian chosen mid-track — Settings re-render in place, ui.language saved, report sent', async () => {
+      await page.click('[data-mode="practice"]');
+      await page.waitForSelector('#screen-practice:not(.hidden)');
+      await page.locator('#practice-list button').first().click();
+      await page.waitForSelector('#screen-setup:not(.hidden)');
+      if (!/^Entraînement/.test(await text('#setup-h'))) throw new Error('setup not in French: ' + await text('#setup-h'));
+      await page.click('#btn-setup-start');
+      await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active', null, { timeout: 10000 });
+      await page.click('#btn-pause');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      await page.click('#btn-pause-settings');
+      await page.waitForSelector('#screen-settings:not(.hidden)');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      const auto = await choice.locator('option').first().textContent();
+      if (auto !== 'Automatique — Français (Canada)') throw new Error('Automatic label not resolved: ' + auto);
+      if (await choice.count() !== 1) throw new Error('expected exactly one language selector');
+      await choice.selectOption('it-IT');
+      await page.waitForFunction(() => document.documentElement.lang === 'it-IT');
+      await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]').textContent));
+      if (calls.settings['ui.language']?.choice !== 'it-IT') throw new Error('ui.language not saved: ' + JSON.stringify(calls.settings));
+      if (await text('#settings-h') !== 'Impostazioni') throw new Error('settings title not re-rendered');
+      if (await text('#gfx-legend') !== 'Grafica') throw new Error('graphics legend not re-rendered');
+      await page.locator('#screen-settings').getByLabel('Movimento ridotto', { exact: true }).waitFor({ state: 'attached' });
+      await page.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+      await page.fill('[data-game-report="title"]', 'Test report');
+      await page.click('[data-game-report="send"]');
+      await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]').textContent));
+      if (!calls.reports?.[0] || calls.reports[0].kind !== 'bug') throw new Error('report not posted');
+      await choice.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: SHOT('language', tag) });
+      const vw = viewport.width;
+      for (const sel of ['[data-game-language="choice"]', '[data-game-report="send"]', '#set-quality']) {
+        const b = await page.locator(sel).boundingBox();
+        if (b && (b.x < 0 || b.x + b.width > vw + 1)) throw new Error(`${sel} cut off: ${JSON.stringify(b)}`);
+      }
+    });
+    await step('language: same track resumes with Italian pause menu and HUD', async () => {
+      await page.locator('#screen-settings [data-nav="back"]').scrollIntoViewIfNeeded();
+      await page.click('#screen-settings [data-nav="back"]');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      if (await text('#pause-h') !== 'In pausa') throw new Error('pause menu not re-rendered');
+      if (await text('#hud-objective') !== 'Corsa di allenamento') throw new Error('HUD objective not re-rendered: ' + await text('#hud-objective'));
+      if ((await page.evaluate(() => window.RhythmSteps.getPhase())) !== 'paused') throw new Error('track did not survive the language change');
+      await page.click('#btn-resume');
+      await page.waitForFunction(() => window.RhythmSteps.getPhase() === 'active', null, { timeout: 5000 });
+      await page.screenshot({ path: SHOT('language-hud', tag) });
+    });
+    await step('language: back to Automatic (fr-CA)', async () => {
+      await page.click('#btn-pause');
+      await page.waitForSelector('#overlay-pause:not(.hidden)');
+      await page.click('#btn-pause-settings');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      await choice.selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      if (calls.settings['ui.language']?.choice !== 'auto') throw new Error('ui.language auto not saved');
+      if (await text('#settings-h') !== 'Paramètres') throw new Error('settings not back in French');
+    });
+    if (errors.length) throw new Error(`[${tag}] language pass console/page errors:\n${errors.join('\n')}`);
+    console.log(`ok - [${tag}] language pass: no console/page errors`);
+  } finally {
+    await context.close();
+  }
+}
+
 let server, browser;
 try {
   server = await startServer();
@@ -331,6 +420,8 @@ try {
 
   await runPass(browser, { tag: 'desktop', viewport: { width: 1280, height: 800 }, hasTouch: false });
   await runPass(browser, { tag: 'mobile', viewport: { width: 390, height: 844 }, hasTouch: true });
+  await languagePass(browser, { tag: 'desktop', viewport: { width: 1280, height: 800 }, hasTouch: false });
+  await languagePass(browser, { tag: 'mobile', viewport: { width: 390, height: 844 }, hasTouch: true });
 
   console.log('\nE2E PASS — both desktop and mobile playthroughs completed with no page errors');
 } catch (e) {
