@@ -256,6 +256,7 @@ async function runPass(browser, { tag, viewport, hasTouch }) {
       st = await gfxState();
       if (st.q.bloom !== 'off' || /bloom/.test(st.summary)) throw new Error(`bloom override not applied (${st.summary})`);
       if (!st.summary.includes('px')) throw new Error(`summary missing pixel size: ${st.summary}`);
+      if (!/ · Level 0 · /.test(st.summary)) throw new Error(`summary lacks the hardware level: ${st.summary}`);
       await page.waitForTimeout(300);
       await page.screenshot({ path: SHOT('graphics', tag) });
       // Survives a reload.

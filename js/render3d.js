@@ -18,15 +18,16 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeRng, streamSeed } from './rng.js';
-import { detectPreset, describe, resolve, SHADOW_MAP } from './gfx.js';
+import { detectLevel, presetForLevel, describe, resolve, SHADOW_MAP, SPARK_MAX, MOTE_MAX } from './gfx.js';
 
 export const LANES = 4;
 const LANE_W = 1.7;
 const TRACK_LEN = 64;          // world units from receptor to horizon
 const RECEPTOR_Z = 0;
 const NOTE_Y = 0.12;
-const SPARKS = 320;            // pooled hit-spark particles (particles: high)
-const MOTES = 160;             // drifting light motes (particles: high)
+const SPARKS = SPARK_MAX;      // hit-spark pool built at the largest budget; the preset uses sparkCap of it
+const MOTES = MOTE_MAX;        // light motes built at the largest budget; the preset draws moteCount of them
+const STARS = 1000;            // sky dust built at the largest budget; the preset draws budget.stars of it
 
 // Authored framing constants (exposed, not magic offsets).
 export const FRAMING = {
@@ -63,7 +64,42 @@ export function isMobileDevice() {
   } catch { return false; }
 }
 
-export function detectedPreset() { return detectPreset(detectGpu(), { mobile: isMobileDevice() }); }
+// StarHermit hardware level (js/gpu-level.js): renderer string + device facts (phone/tablet, cores, memory).
+let levelCache = null;
+export function detectedLevel() {
+  if (levelCache !== null) return levelCache;
+  let sys = { mobile: isMobileDevice() };
+  try {
+    const G = globalThis.StarHermitGpu;
+    if (G) {
+      const d = G.detectSystem();
+      sys = { ...sys, mobile: sys.mobile || d.mobile, touch: d.touch, screen: d.screen, cores: d.cores, memoryGb: d.memoryGb, astc: d.astc, webgl2: d.webgl ? d.webgl2 : true };
+    }
+  } catch { /* defaults */ }
+  levelCache = detectLevel(detectGpu(), sys);
+  return levelCache;
+}
+export function detectedPreset() { return presetForLevel(detectedLevel()); }
+
+// Run a post pass at a fraction of the frame: EffectComposer.addPass/setSize hand every pass the full
+// frame size, so the pass's own setSize applies the budget's scale (half-res bloom/GTAO below Ultra).
+function atScale(pass, k) {
+  if (!(k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
+}
+
+// Gem, receptor, lane and pylon shading per preset budget: Lambert (Low), Standard (Balanced) or
+// clear-coated Physical (High, Ultra). Unset parameters are left out (three warns on undefined).
+function tieredMaterial(tier, spec) {
+  const { roughness, metalness, envMapIntensity, clearcoat, clearcoatRoughness, ...base } = spec;
+  const pick = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  if (tier === 'lambert') return new THREE.MeshLambertMaterial(pick(base));
+  const pbr = pick({ ...base, roughness, metalness, envMapIntensity });
+  if (tier === 'physical' && clearcoat !== undefined) return new THREE.MeshPhysicalMaterial({ ...pbr, ...pick({ clearcoat, clearcoatRoughness }) });
+  return new THREE.MeshStandardMaterial(pbr);
+}
 
 // Colour grade + vignette (display-space colours in, display-space out).
 const GradeShader = {
@@ -120,10 +156,11 @@ const SKY_FRAG = `
   }`;
 
 // Procedural surface textures (deterministic, drawn once).
-function laneTexture() {
+function laneTexture(height = 256) {
   const c = document.createElement('canvas');
-  c.width = 64; c.height = 256;
+  c.width = height / 4; c.height = height; // authored at 64×256, drawn into the preset's texture budget
   const g = c.getContext('2d');
+  g.scale(height / 256, height / 256);
   const rng = makeRng(streamSeed(7, 'lane-tex'));
   g.fillStyle = '#7c8699';
   g.fillRect(0, 0, 64, 256);
@@ -147,10 +184,11 @@ function laneTexture() {
   return t;
 }
 
-function gridTexture() {
+function gridTexture(size = 128) {
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
+  c.width = c.height = size; // authored at 128 px
   const g = c.getContext('2d');
+  g.scale(size / 128, size / 128);
   g.fillStyle = '#000';
   g.fillRect(0, 0, 128, 128);
   g.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -192,8 +230,9 @@ export class Renderer3D {
     this.mirrorLanes = !!options.mirrorLanes;
     this.onLaneInput = options.onLaneInput || (() => {});
     this.gpu = detectGpu();
-    this.detected = detectedPreset();
-    this.q = resolve(options.gfx, this.detected);
+    this.gpuLevel = detectedLevel();
+    this.detected = presetForLevel(this.gpuLevel);
+    this.q = resolve(options.gfx, this.detected, this.gpuLevel);
     this._rng = makeRng(streamSeed(options.seed || 1, 'visual'));
     this._fxRng = makeRng(streamSeed(options.seed || 1, 'sparks'));
     this._time = 0;
@@ -292,14 +331,14 @@ export class Renderer3D {
       uTop: { value: new THREE.Color(t.sky) }, uHorizon: { value: new THREE.Color(t.fog) },
       uGlow: { value: new THREE.Color(t.laneEdge).multiplyScalar(0.16) }, uTime: { value: 0 }, uBeat: { value: 0 },
     };
-    this.sky = new THREE.Mesh(new THREE.SphereGeometry(200, 32, 16), new THREE.ShaderMaterial({
+    this.sky = new THREE.Mesh(this._skyGeo(this.q.budget.segments), new THREE.ShaderMaterial({
       uniforms: this.skyU, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, fog: false,
     }));
     this.sky.renderOrder = -1;
     this.scene.add(this.sky);
 
     // --- Floor grid far below the causeway (detail) ---
-    this.gridTex = gridTexture();
+    this.gridTex = gridTexture(this.q.budget.laneTex / 2);
     this.floorMat = new THREE.MeshStandardMaterial({
       color: 0x05070c, roughness: 0.3, metalness: 0.85, envMapIntensity: 0.15,
       emissive: t.env, emissiveMap: this.gridTex, emissiveIntensity: 0.9,
@@ -314,16 +353,14 @@ export class Renderer3D {
     // --- Causeway: lane strips ---
     this.laneGroup = new THREE.Group();
     this.scene.add(this.laneGroup);
-    this.laneTex = laneTexture();
+    this.laneTex = laneTexture(this.q.budget.laneTex);
     this.laneTex.repeat.set(1, 24);
+    this._texBudget = this.q.budget.laneTex;
     const laneGeo = new THREE.BoxGeometry(LANE_W - 0.12, 0.08, TRACK_LEN + 8);
     this.laneMeshes = [];
     this.laneMats = [];
     for (let i = 0; i < LANES; i++) {
-      const mat = new THREE.MeshStandardMaterial({
-        color: t.lane, roughness: 0.6, metalness: 0.45, envMapIntensity: 0.08,
-        emissive: t.laneEdge, emissiveIntensity: 0.06,
-      });
+      const mat = tieredMaterial(this.q.budget.material, this._matSpec('lane'));
       const m = new THREE.Mesh(laneGeo, mat);
       m.position.set(this._laneX(i), 0, -TRACK_LEN / 2 + 4);
       m.receiveShadow = true;
@@ -331,7 +368,6 @@ export class Renderer3D {
       this.laneGroup.add(m);
       this.laneMeshes.push(m);
       this.laneMats.push(mat);
-      this.litMats.push(mat);
     }
     // Lane edge light strips (HDR so bloom picks them up).
     const edgeGeo = new THREE.BoxGeometry(0.05, 0.1, TRACK_LEN + 8);
@@ -352,19 +388,14 @@ export class Renderer3D {
     this._setJudgeColor();
 
     this.receptors = [];
-    const recGeo = new THREE.CylinderGeometry(0.55, 0.62, 0.1, 32);
+    const recGeo = this._receptorGeo(this.q.budget.segments);
     for (let i = 0; i < LANES; i++) {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: 0x0a0a12, roughness: 0.25, metalness: 0.85, clearcoat: 1, clearcoatRoughness: 0.1,
-        envMapIntensity: 0.6,
-        emissive: this.cvd ? this.options.cvdColors.receptor : t.receptor, emissiveIntensity: 0.7,
-      });
+      const mat = tieredMaterial(this.q.budget.material, this._matSpec('receptor'));
       const r = new THREE.Mesh(recGeo, mat);
       r.position.set(this._laneX(i), 0.1, RECEPTOR_Z);
       r.castShadow = true;
       this.scene.add(r);
       this.receptors.push(r);
-      this.litMats.push(mat);
     }
 
     // --- Note pools (tap gems + hold bars): glossy clear-coated gems ---
@@ -372,32 +403,22 @@ export class Renderer3D {
     const tapGeo = new THREE.OctahedronGeometry(0.5);
     tapGeo.scale(1, 0.55, 1);
     for (let i = 0; i < 48; i++) {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: this._noteColor(), roughness: 0.12, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05,
-        envMapIntensity: 1.1,
-        emissive: this._noteColor(), emissiveIntensity: 1.0,
-      });
+      const mat = tieredMaterial(this.q.budget.material, this._matSpec('note'));
       const m = new THREE.Mesh(tapGeo, mat);
       m.visible = false;
       m.castShadow = true;
       this.scene.add(m);
       this.notePool.push({ mesh: m, mat, inUse: false, noteId: -1, kind: 'tap' });
-      this.litMats.push(mat);
     }
     this.holdPool = [];
     const holdGeo = new THREE.BoxGeometry(0.5, 0.16, 1); // z scaled per note
     for (let i = 0; i < 16; i++) {
-      const mat = new THREE.MeshPhysicalMaterial({
-        color: this._holdColor(), roughness: 0.2, metalness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1,
-        envMapIntensity: 0.8,
-        emissive: this._holdColor(), emissiveIntensity: 0.95, transparent: true, opacity: 0.95,
-      });
+      const mat = tieredMaterial(this.q.budget.material, this._matSpec('hold'));
       const m = new THREE.Mesh(holdGeo, mat);
       m.visible = false;
       m.castShadow = true;
       this.scene.add(m);
       this.holdPool.push({ mesh: m, mat, inUse: false, noteId: -1 });
-      this.litMats.push(mat);
     }
 
     // --- Environment: instanced pylons + arches, deterministic placement ---
@@ -405,10 +426,9 @@ export class Renderer3D {
     this.scene.add(this.envGroup);
     const pylonCount = 24;
     const pylonGeo = new THREE.CylinderGeometry(0.3, 0.55, 7, 6);
-    this.pylonMat = new THREE.MeshStandardMaterial({
-      color: t.env, roughness: 0.45, metalness: 0.5, envMapIntensity: 0.4, emissive: t.env, emissiveIntensity: 0.25, flatShading: true,
-    });
-    this.litMats.push(this.pylonMat);
+    this.pylonMat = tieredMaterial(this.q.budget.material, this._matSpec('pylon'));
+    this._matTier = this.q.budget.material;
+    this._collectLitMats();
     this.pylons = new THREE.InstancedMesh(pylonGeo, this.pylonMat, pylonCount * 2);
     // Glowing caps on each pylon (detail) that pulse with the beat.
     const capGeo = new THREE.OctahedronGeometry(0.24);
@@ -441,7 +461,7 @@ export class Renderer3D {
 
     // Light arches across the causeway every so often.
     const archCount = 8;
-    const archGeo = new THREE.TorusGeometry(LANE_W * LANES * 0.62, 0.09, 8, 48, Math.PI);
+    const archGeo = this._archGeo(this.q.budget.segments);
     this.archMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.65, depthWrite: false });
     this._hdr(this.archMat.color, t.accent, 1.2);
     this.arches = [];
@@ -453,7 +473,7 @@ export class Renderer3D {
     }
 
     // Starfield / sky dust (cosmetic layer; never raycast).
-    const starCount = 700;
+    const starCount = STARS;
     const starGeo = new THREE.BufferGeometry();
     const pos = new Float32Array(starCount * 3);
     const starRng = makeRng(streamSeed(this.options.seed || 1, 'stars'));
@@ -470,8 +490,8 @@ export class Renderer3D {
 
     // Beat pulse rings emitted from the judgment line (pooled).
     this.pulsePool = [];
-    const pulseGeo = new THREE.RingGeometry(0.5, 0.58, 32);
-    pulseGeo.rotateX(-Math.PI / 2);
+    const pulseGeo = this._pulseGeo(this.q.budget.segments);
+    this._segments = this.q.budget.segments;
     for (let i = 0; i < 12; i++) {
       const mat = new THREE.MeshBasicMaterial({
         color: t.receptor, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false,
@@ -539,6 +559,66 @@ export class Renderer3D {
   }
 
   _hdr(color, hex, k) { return color.set(hex).multiplyScalar(k); }
+
+  // Material parameters per role; tieredMaterial() keeps what the preset's shading model supports.
+  _matSpec(role) {
+    const t = this.theme;
+    if (role === 'lane') return { color: t.lane, roughness: 0.6, metalness: 0.45, envMapIntensity: 0.08, emissive: this.cvd ? this.options.cvdColors.laneEdge : t.laneEdge, emissiveIntensity: 0.06 };
+    if (role === 'receptor') return { color: 0x0a0a12, roughness: 0.25, metalness: 0.85, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 0.6, emissive: this.cvd ? this.options.cvdColors.receptor : t.receptor, emissiveIntensity: 0.7 };
+    if (role === 'note') return { color: this._noteColor(), roughness: 0.12, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.1, emissive: this._noteColor(), emissiveIntensity: 1.0 };
+    if (role === 'hold') return { color: this._holdColor(), roughness: 0.2, metalness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 0.8, emissive: this._holdColor(), emissiveIntensity: 0.95, transparent: true, opacity: 0.95 };
+    return { color: t.env, roughness: 0.45, metalness: 0.5, envMapIntensity: 0.4, emissive: t.env, emissiveIntensity: 0.25, flatShading: true }; // pylon
+  }
+
+  _collectLitMats() {
+    this.litMats = [this.floorMat, ...this.laneMats, ...this.receptors.map((r) => r.material),
+      ...this.notePool.map((p) => p.mat), ...this.holdPool.map((p) => p.mat), this.pylonMat];
+  }
+
+  // Swap gem/receptor/lane/pylon materials to the preset's shading model, keeping live colours.
+  _applyMaterialTier(tier) {
+    if (this._matTier === tier) return;
+    this._matTier = tier;
+    const swap = (old, role) => {
+      const m = tieredMaterial(tier, this._matSpec(role));
+      m.color.copy(old.color); m.emissive.copy(old.emissive); m.emissiveIntensity = old.emissiveIntensity; m.map = old.map;
+      old.dispose();
+      return m;
+    };
+    this.laneMats = this.laneMats.map((old, i) => (this.laneMeshes[i].material = swap(old, 'lane')));
+    for (const r of this.receptors) r.material = swap(r.material, 'receptor');
+    for (const p of this.notePool) p.mesh.material = p.mat = swap(p.mat, 'note');
+    for (const p of this.holdPool) p.mesh.material = p.mat = swap(p.mat, 'hold');
+    this.pylons.material = this.pylonMat = swap(this.pylonMat, 'pylon');
+    this._collectLitMats();
+  }
+
+  // Round geometry at the preset's segment budget (receptor discs, beat rings, sky dome, light arches).
+  _receptorGeo(n) { return new THREE.CylinderGeometry(0.55, 0.62, 0.1, n); }
+  _pulseGeo(n) { const g = new THREE.RingGeometry(0.5, 0.58, n); g.rotateX(-Math.PI / 2); return g; }
+  _skyGeo(n) { return new THREE.SphereGeometry(200, n, n / 2); }
+  _archGeo(n) { return new THREE.TorusGeometry(LANE_W * LANES * 0.62, 0.09, Math.max(6, n / 4), n * 1.5, Math.PI); }
+  _applySegments(n) {
+    if (this._segments === n) return;
+    this._segments = n;
+    const reshape = (meshes, geo) => { const old = meshes[0]?.geometry; for (const m of meshes) m.geometry = geo; old?.dispose(); };
+    reshape(this.receptors, this._receptorGeo(n));
+    reshape(this.pulsePool.map((p) => p.mesh), this._pulseGeo(n));
+    reshape([this.sky], this._skyGeo(n));
+    reshape(this.arches, this._archGeo(n));
+  }
+
+  _applyTextureBudget(h) {
+    if (this._texBudget === h) return;
+    this._texBudget = h;
+    const lane = laneTexture(h);
+    lane.repeat.copy(this.laneTex.repeat); lane.offset.copy(this.laneTex.offset);
+    for (const m of this.laneMats) if (m.map === this.laneTex) m.map = lane;
+    this.laneTex.dispose(); this.laneTex = lane;
+    const grid = gridTexture(h / 2);
+    this.floorMat.emissiveMap = grid;
+    this.gridTex.dispose(); this.gridTex = grid;
+  }
   _setJudgeColor() { this._hdr(this.judgeLine.material.color, this.cvd ? this.options.cvdColors.receptor : this.theme.receptor, 1.5); }
 
   _noteColor() { return this.cvd ? this.options.cvdColors.note : this.theme.note; }
@@ -586,8 +666,13 @@ export class Renderer3D {
   // a new WebGL context (canvas MSAA toggled) — the caller rebuilds.
   // -------------------------------------------------------------------------
   setGraphics(saved) {
-    const g = resolve(saved, this.detected);
+    const g = resolve(saved, this.detected, this.gpuLevel);
     this.q = g;
+    const b = g.budget;
+    const tierChanged = this._matTier !== b.material;
+    this._applyMaterialTier(b.material);
+    this._applySegments(b.segments);
+    this._applyTextureBudget(b.laneTex);
     const size = SHADOW_MAP[g.shadows];
     const shadowsOn = size > 0;
     const envOn = g.detail === 'detailed';
@@ -605,7 +690,7 @@ export class Renderer3D {
     this.sky.visible = envOn;
     this.floor.visible = envOn;
     this.caps.visible = envOn;
-    this.stars.geometry.setDrawRange(0, envOn ? 700 : 200);
+    this.stars.geometry.setDrawRange(0, envOn ? Math.min(STARS, b.stars) : Math.min(200, b.stars));
     this.pylons.count = envOn ? this.pylonCount * 2 : this.pylonCount;
     this.caps.count = this.pylons.count;
     for (let i = 0; i < this.arches.length; i++) this.arches[i].visible = envOn || i < 4;
@@ -619,8 +704,14 @@ export class Renderer3D {
     const hi = g.particles === 'high';
     this.sparks.visible = hi;
     this.motes.visible = hi;
+    this.sparkCap = Math.min(SPARKS, b.sparks);
+    this.moteCount = Math.min(MOTES, b.motes);
+    for (let i = this.sparkCap; i < SPARKS; i++) { this.sparkLife[i] = 0; this.sparkPos[i * 3 + 1] = -50; }
+    if (this._sparkNext >= this.sparkCap) this._sparkNext = 0;
+    this.sparks.geometry.setDrawRange(0, this.sparkCap);
+    this.motes.geometry.setDrawRange(0, this.moteCount);
     if (!hi) this.sparkLife.fill(0);
-    if (wasShadow !== shadowsOn || wasEnv !== envOn) for (const m of this.litMats) m.needsUpdate = true;
+    if (tierChanged || wasShadow !== shadowsOn || wasEnv !== envOn) for (const m of this.litMats) m.needsUpdate = true;
     this.adaptiveScale = 1;
     this._frames = [];
     this.postKey = null; // rebuild the post chain on the next frame
@@ -637,6 +728,7 @@ export class Renderer3D {
     const px = [Math.round(this.size[0] * this.pixelRatio), Math.round(this.size[1] * this.pixelRatio)];
     return {
       gpu: this.gpu || 'unknown GPU',
+      level: this.gpuLevel,
       detected: this.detected,
       resolved: this.q,
       pixels: px,
@@ -684,10 +776,10 @@ export class Renderer3D {
         ao.blendIntensity = 0.7;
         ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: g.ao === 'high' ? 16 : 8 });
         ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: g.ao === 'high' ? 6 : 4, rings: 2, samples: g.ao === 'high' ? 16 : 8 });
-        composer.addPass(ao);
+        composer.addPass(atScale(ao, g.budget.aoRes));
       }
       // High threshold: only emissive gems, light strips and highlights bloom.
-      if (g.bloom === 'on') composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.4, 0.9));
+      if (g.bloom === 'on') composer.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.4, 0.9), g.budget.bloomRes));
       if (g.grade === 'on') composer.addPass(new ShaderPass(GradeShader));
       composer.addPass(new OutputPass());
       if (g.antialias === 'smaa') composer.addPass(new SMAAPass(pw, ph));
@@ -836,7 +928,7 @@ export class Renderer3D {
     const r = this._fxRng;
     for (let k = 0; k < n; k++) {
       const i = this._sparkNext;
-      this._sparkNext = (this._sparkNext + 1) % SPARKS;
+      this._sparkNext = (this._sparkNext + 1) % this.sparkCap;
       const a = r.next() * Math.PI * 2;
       const sp = 1.5 + r.next() * 3;
       this.sparkPos[i * 3] = x0 + Math.cos(a) * 0.3;
@@ -853,7 +945,7 @@ export class Renderer3D {
   _updateParticles(dt, animated) {
     if (!this.sparks.visible) return;
     let any = false;
-    for (let i = 0; i < SPARKS; i++) {
+    for (let i = 0; i < this.sparkCap; i++) {
       if (this.sparkLife[i] <= 0) continue;
       any = true;
       this.sparkLife[i] -= dt;
@@ -872,7 +964,7 @@ export class Renderer3D {
     }
     this._sparksDirty = any;
     if (animated) { // motes drift slowly toward the camera
-      for (let i = 0; i < MOTES; i++) {
+      for (let i = 0; i < this.moteCount; i++) {
         const j = i * 3;
         this.motePos[j + 2] += dt * 2.2;
         this.motePos[j + 1] += Math.sin(this._time * 0.7 + i) * dt * 0.08;

@@ -142,7 +142,7 @@ export function refreshSummary() {
     note.classList.remove('hidden');
     return;
   }
-  el.textContent = `${info.gpu} · ${describe(info.resolved, info.pixels, T.words)}`;
+  el.textContent = [info.gpu, info.level != null ? fmt(T.level, { n: info.level }) : null, describe(info.resolved, info.pixels, T.words)].filter(Boolean).join(' · ');
   note.textContent = T.postFailed;
   note.classList.toggle('hidden', !info.postFailed);
 }

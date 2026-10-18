@@ -3,7 +3,7 @@
 import { lang as gameLang } from './lang.js';
 
 const EN = {
-  legend: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {tier})', renderScale: 'Render scale',
+  legend: 'Graphics', quality: 'Quality', level: 'Level {n}', auto: 'Auto (detected: {tier})', renderScale: 'Render scale',
   fromPreset: 'From preset ({tier})', adaptive: 'Adaptive resolution', showFps: 'Show frame rate',
   postFailed: 'Post-processing is unavailable on this device, so the game renders without it.',
   fallback: '3D graphics are unavailable; these settings apply when the 3D renderer runs.',
@@ -16,7 +16,7 @@ const EN = {
 const EN_GB = { ...EN, cats: { ...EN.cats, grade: 'Colour grade' }, words: { ...EN.words } };
 
 const ES_419 = {
-  legend: 'Gráficos', quality: 'Calidad', auto: 'Automática (detectada: {tier})', renderScale: 'Escala de renderizado',
+  legend: 'Gráficos', quality: 'Calidad', level: 'Nivel {n}', auto: 'Automática (detectada: {tier})', renderScale: 'Escala de renderizado',
   fromPreset: 'Según el ajuste ({tier})', adaptive: 'Resolución adaptable', showFps: 'Mostrar cuadros por segundo',
   postFailed: 'El posprocesamiento no está disponible en este dispositivo; el juego se muestra sin él.',
   fallback: 'Los gráficos 3D no están disponibles; estos ajustes se aplican cuando se usa el renderizador 3D.',
@@ -32,7 +32,7 @@ const ES_ES = {
 };
 
 const DE = {
-  legend: 'Grafik', quality: 'Qualität', auto: 'Automatisch (erkannt: {tier})', renderScale: 'Renderskalierung',
+  legend: 'Grafik', quality: 'Qualität', level: 'Stufe {n}', auto: 'Automatisch (erkannt: {tier})', renderScale: 'Renderskalierung',
   fromPreset: 'Aus Voreinstellung ({tier})', adaptive: 'Adaptive Auflösung', showFps: 'Bildrate anzeigen',
   postFailed: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar; das Spiel wird ohne sie dargestellt.',
   fallback: '3D-Grafik ist nicht verfügbar; diese Einstellungen gelten für den 3D-Renderer.',
@@ -43,7 +43,7 @@ const DE = {
 };
 
 const FR = {
-  legend: 'Graphismes', quality: 'Qualité', auto: 'Automatique (détectée : {tier})', renderScale: 'Échelle de rendu',
+  legend: 'Graphismes', quality: 'Qualité', level: 'Niveau {n}', auto: 'Automatique (détectée : {tier})', renderScale: 'Échelle de rendu',
   fromPreset: 'Selon le préréglage ({tier})', adaptive: 'Résolution adaptative', showFps: 'Afficher les images par seconde',
   postFailed: 'Le post-traitement n’est pas disponible sur cet appareil ; le jeu s’affiche sans.',
   fallback: 'Les graphismes 3D ne sont pas disponibles ; ces réglages s’appliquent au moteur 3D.',
@@ -55,7 +55,7 @@ const FR = {
 const FR_CA = { ...FR, fallback: 'Les graphiques 3D ne sont pas disponibles; ces réglages s’appliquent au moteur 3D.', legend: 'Graphiques', auto: 'Automatique (détectée : {tier})' };
 
 const PT_BR = {
-  legend: 'Gráficos', quality: 'Qualidade', auto: 'Automática (detectada: {tier})', renderScale: 'Escala de renderização',
+  legend: 'Gráficos', quality: 'Qualidade', level: 'Nível {n}', auto: 'Automática (detectada: {tier})', renderScale: 'Escala de renderização',
   fromPreset: 'Da predefinição ({tier})', adaptive: 'Resolução adaptável', showFps: 'Mostrar taxa de quadros',
   postFailed: 'O pós-processamento não está disponível neste dispositivo; o jogo é exibido sem ele.',
   fallback: 'Gráficos 3D indisponíveis; estas configurações valem quando o renderizador 3D estiver ativo.',
@@ -66,7 +66,7 @@ const PT_BR = {
 };
 
 const IT = {
-  legend: 'Grafica', quality: 'Qualità', auto: 'Automatica (rilevata: {tier})', renderScale: 'Scala di rendering',
+  legend: 'Grafica', quality: 'Qualità', level: 'Livello {n}', auto: 'Automatica (rilevata: {tier})', renderScale: 'Scala di rendering',
   fromPreset: 'Dal preset ({tier})', adaptive: 'Risoluzione adattiva', showFps: 'Mostra frequenza fotogrammi',
   postFailed: 'La post-elaborazione non è disponibile su questo dispositivo; il gioco viene mostrato senza.',
   fallback: 'La grafica 3D non è disponibile; queste impostazioni valgono per il renderer 3D.',
