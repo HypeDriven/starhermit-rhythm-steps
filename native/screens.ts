@@ -162,9 +162,11 @@ export function drawScreens(): void {
   for (const fn of acts.splice(0)) fn();
   const f = frame();
   if (app.focusNext) {
+    // until the widget takes it (a browser's first frames may come before the UI shows)
     const age = f.frame - app.openedFrame;
-    if (age >= 1) ui.setFocus(app.focusNext);
-    if (age >= 3) app.focusNext = null;
+    if (age >= 1 && ui.focused() === null) ui.setFocus(app.focusNext);
+    else if (age >= 3 && ui.focused() !== null) app.focusNext = null;
+    if (age >= 120) app.focusNext = null;
   }
 }
 function screenFor(s: Screen | "settings" | "help", L: Layout): void {

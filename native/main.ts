@@ -23,7 +23,7 @@
 // The causeway is drawn between steps by the frame's interpolation.
 import "./i18n.ts";
 import { clipboard, frame, onFixedUpdate, onFocus, onRender, onResume, onStart, onSuspend, onUpdate, setFixedRate } from "starhermit:engine";
-import { onAction, onPointerButton, onTouch, vibrate } from "starhermit:input";
+import { onAction, onPointerButton, onTouch, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn } from "starhermit:platform";
 import * as audio from "./audio.ts";
@@ -128,8 +128,11 @@ export function show(screen: Screen | null, push = true): void {
   }
   if (screen === "chase") refreshBoard();
 }
+/** A touch-first player (a phone): screens open with nothing focused, so a later Enter presses nothing by surprise. */
 export function touchFirst(): boolean {
+  if (primaryPointer() === "coarse") return true;
   const f = frame();
+  if (!f.width || !f.height) return false; // before the first frame (onStart)
   const sc = ui.preferences().scale || 1;
   const w = f.width / sc, h = f.height / sc;
   return (w <= 700 && h >= w) || (w > h && h <= 500);
