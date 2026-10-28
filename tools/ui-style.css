@@ -1,0 +1,174 @@
+/* Rhythm Steps — the browser build's css/style.css rewritten class-based for
+   the engine's UI (`npm run css` converts it into assets/ui-style.json).
+   Element selectors, ids, :has(), attribute selectors and @media do not
+   convert: every widget names its classes, and the breakpoints (wide from
+   1024 px, phone portrait up to 700 px wide, short landscape up to 500 px
+   tall) are layouts picked in native/screens.ts. High contrast (the old
+   body.high-contrast palette), larger text and reduced motion are the
+   runtime's options; native/style.ts swaps the tokens. rgba() colours are
+   written as #rrggbbaa. */
+
+:root {
+  --bg: #05070f;
+  --panel: #0e1428eb;
+  --edge: #5a8cff40;
+  --text: #e8eeff;
+  --muted: #93a0c4;
+  --accent: #35e0ff;
+  --accent2: #ff5ea8;
+  --good: #7dffb0;
+  --bad: #ff6b6b;
+  --gold: #ffd25e;
+  --ink: #04121a;
+  --btn: #283c6e80;
+  --btn-hover: #3c5aa099;
+  --soft: #ffffff0d;
+}
+
+* { box-sizing: border-box; }
+
+/* ------------------------------------------------------------- screens and panels */
+.screen { background: radial-gradient(ellipse farthest-corner at 50% -10%, #3560e02e 0%, #3560e000 60%), var(--bg); border-radius: 0; }
+.screen-base { background: var(--bg); border-radius: 0; }
+.title-wash { background: radial-gradient(ellipse farthest-corner at 50% 40%, #05070f59 0%, #05070fd1 75%); border-radius: 0; }
+.panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; padding: 24px; box-shadow: 0 20px 60px #00000080; }
+.panel-tight { background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; padding: 14px; box-shadow: 0 20px 60px #00000080; }
+.pause-dialog { background: var(--panel); border: 1px solid var(--edge); border-radius: 16px; padding: 24px; box-shadow: 0 20px 60px #00000080; }
+
+.game-logo { color: var(--text); font-size: 64px; font-weight: 700; letter-spacing: 2.5px; }
+.game-logo-accent { color: var(--accent); font-size: 64px; font-weight: 700; letter-spacing: 2.5px; }
+.tagline { color: var(--muted); font-size: 16px; }
+.h2 { color: var(--text); font-size: 24px; font-weight: 700; }
+.h3 { color: var(--text); font-size: 18px; font-weight: 700; }
+.body { color: var(--text); font-size: 16px; }
+.muted { color: var(--muted); font-size: 14.4px; }
+.note-gold { color: var(--gold); font-size: 14.4px; }
+.rule { color: var(--text); font-size: 16px; }
+.field-label { color: var(--muted); font-size: 14.4px; }
+
+/* ------------------------------------------------------------- buttons */
+.btn {
+  min-height: 44px; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--edge);
+  background: var(--btn); color: var(--text); font-size: 16px; text-align: center;
+}
+.btn:hover { background: var(--btn-hover); }
+.btn:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.btn-primary {
+  min-height: 44px; padding: 10px 18px; border-radius: 10px; border: 1px solid #00000000;
+  background: var(--accent); color: var(--ink); font-size: 16px; font-weight: 700; text-align: center;
+}
+.btn-primary:hover { background: #6cebff; }
+.btn-primary:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.btn-big {
+  min-height: 44px; padding: 14px 42px; border-radius: 10px; border: 1px solid #00000000;
+  background: var(--accent); color: var(--ink); font-size: 20.8px; font-weight: 700; text-align: center;
+}
+.btn-big:hover { background: #6cebff; }
+.btn-big:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.btn-ghost {
+  min-height: 44px; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--edge);
+  background: #00000000; color: var(--text); font-size: 16px; text-align: center;
+}
+.btn-ghost:hover { background: var(--btn-hover); }
+.btn-ghost:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.btn-danger {
+  min-height: 44px; padding: 10px 18px; border-radius: 10px; border: 1px solid #ff6b6b80;
+  background: var(--btn); color: #ffb3b3; font-size: 16px; text-align: center;
+}
+.btn-danger:hover { background: var(--btn-hover); }
+.btn-danger:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.mode-btn {
+  min-height: 44px; padding: 14px; border-radius: 10px; border: 1px solid var(--edge);
+  background: var(--btn); color: var(--text); font-size: 16px; text-align: center;
+}
+.mode-btn:hover { background: var(--btn-hover); }
+.mode-btn:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.mode-small { color: var(--muted); font-size: 13.6px; }
+.mode-title { color: var(--text); font-size: 16px; }
+.choice {
+  min-height: 44px; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--edge);
+  background: var(--btn); color: var(--text); font-size: 16px; text-align: start;
+}
+.choice:hover { background: var(--btn-hover); }
+.choice:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.choice.active { background: #35e0ff40; border: 1px solid var(--accent); }
+.choice-title { color: var(--text); font-size: 16px; font-weight: 700; }
+.choice-text { color: var(--muted); font-size: 14.4px; }
+
+/* ------------------------------------------------------------- journey grid */
+.stage-btn {
+  min-height: 64px; padding: 6px; border-radius: 10px; border: 1px solid var(--edge);
+  background: #283c6e66; color: var(--text); font-size: 13.6px; text-align: center;
+}
+.stage-btn:hover { background: var(--btn-hover); }
+.stage-btn:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.stage-mastery {
+  min-height: 64px; padding: 6px; border-radius: 10px; border: 1px solid var(--accent2);
+  background: #283c6e66; color: var(--text); font-size: 13.6px; text-align: center;
+}
+.stage-mastery:hover { background: var(--btn-hover); }
+.stage-mastery:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.stage-num { color: var(--text); font-size: 13.6px; font-weight: 700; }
+.stage-name { color: var(--muted); font-size: 11.2px; }
+.stage-stars { color: var(--gold); font-size: 13.6px; letter-spacing: 1px; }
+
+/* ------------------------------------------------------------- setup, results */
+.meta { background: var(--soft); border-radius: 8px; padding: 8px 10px; }
+.meta-dt { color: var(--muted); font-size: 12.8px; }
+.meta-dd { color: var(--text); font-size: 16px; font-weight: 600; }
+.grade-badge { color: var(--accent); font-size: 64px; font-weight: 900; text-shadow: 0 0 30px #35e0ff80; }
+.tr { padding: 6px 4px; border-radius: 0; }
+.tr-total { padding: 6px 4px; border-top: 1px solid var(--edge); border-radius: 0; }
+.th { color: var(--text); font-size: 16px; font-weight: 700; }
+.td { color: var(--text); font-size: 16px; }
+.th-total { color: var(--text); font-size: 18.4px; font-weight: 800; }
+.td-total { color: var(--text); font-size: 18.4px; font-weight: 800; }
+.chip { background: #ffffff12; border-radius: 999px; padding: 4px 10px; }
+.chip-text { color: var(--text); font-size: 14.4px; }
+.ach-chip { background: #ffd45e26; border: 1px solid #ffd45e66; border-radius: 999px; padding: 4px 12px; }
+.ach-text { color: var(--gold); font-size: 13.6px; }
+
+/* ------------------------------------------------------------- settings, help, profile */
+.fieldset { border: 1px solid var(--edge); border-radius: 10px; padding: 12px; }
+.legend { color: var(--accent); font-size: 16px; }
+.help-card { background: var(--soft); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; }
+.help-h3 { color: var(--accent); font-size: 18px; font-weight: 700; }
+.help-text { color: var(--text); font-size: 16px; }
+.ach-row { padding: 8px 0; border-bottom: 1px solid #ffffff12; border-radius: 0; }
+.ach-name { color: var(--text); font-size: 16px; font-weight: 700; }
+.ach-desc { color: var(--text); font-size: 16px; }
+.ach-locked-name { color: #e8eeff73; font-size: 16px; font-weight: 700; }
+.ach-locked-desc { color: #e8eeff73; font-size: 16px; }
+.board-line { color: var(--text); font-size: 16px; }
+
+/* ------------------------------------------------------------- HUD */
+.hud-objective { background: #05081291; border-radius: 999px; padding: 4px 12px; }
+.hud-objective-text { color: var(--text); font-size: 15.2px; }
+.hud-score { color: var(--text); font-size: 25.6px; font-weight: 700; text-shadow: 0 1px 4px #000000cc; }
+.hud-combo { color: var(--accent); font-size: 17.6px; font-weight: 600; text-shadow: 0 1px 4px #000000cc; }
+.hud-acc { color: var(--muted); font-size: 13.6px; text-shadow: 0 1px 4px #000000cc; }
+.hud-health { color: var(--bad); font-size: 16px; font-weight: 700; text-shadow: 0 1px 4px #000000cc; }
+.icon-btn {
+  min-width: 44px; min-height: 44px; padding: 0; border-radius: 10px; border: 1px solid var(--edge);
+  background: #0a1022b3; color: var(--text); font-size: 17.6px; text-align: center;
+}
+.icon-btn:hover { background: var(--btn-hover); }
+.icon-btn:focus-visible { outline: 3px solid #ffe45e; outline-offset: 2px; }
+.judge-perfect { color: #fff6a8; font-size: 32px; font-weight: 800; text-shadow: 0 2px 12px #000000b3; }
+.judge-great { color: var(--good); font-size: 32px; font-weight: 800; text-shadow: 0 2px 12px #000000b3; }
+.judge-good { color: #8ab8ff; font-size: 32px; font-weight: 800; text-shadow: 0 2px 12px #000000b3; }
+.judge-miss { color: var(--bad); font-size: 32px; font-weight: 800; text-shadow: 0 2px 12px #000000b3; }
+.caption { background: #000000b3; border-radius: 6px; padding: 4px 14px; }
+.caption-text { color: var(--text); font-size: 15.2px; }
+.countdown { color: var(--accent); font-size: 144px; font-weight: 900; text-shadow: 0 0 32px #35e0ff99; }
+.lesson { background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; padding: 12px 20px; }
+.lesson-text { color: var(--text); font-size: 16.8px; text-align: center; }
+.lesson-progress { color: var(--accent); font-size: 16px; font-weight: 600; }
+.lane-btn {
+  min-height: 64px; padding: 0; border-radius: 12px; border: 1px solid #78b4ff59;
+  background: #141e3c73; color: var(--text); font-size: 14.4px; text-align: center;
+}
+.lane-btn.active { background: #35e0ff59; border: 1px solid var(--accent); }
+.lane-key { color: #e8eeffcc; font-size: 14.4px; font-weight: 700; border: 1px solid #ffffff4d; border-radius: 6px; padding: 2px 10px; }
+.toast { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 10px 18px; }
+.toast-text { color: var(--text); font-size: 16px; text-align: center; }

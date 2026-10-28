@@ -1,11 +1,19 @@
 {
   "name": "rhythm-steps",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "description": "Rhythm Steps — tap and hold notes in time along a glowing concert causeway, on the StarHermit engine.",
   "scripts": {
-    "test": "node tests/run-tests.mjs && node --test tests/platform.test.mjs tests/i18n.test.mjs",
-    "test:e2e": "node tests/e2e.mjs"
+    "test": "npm run test:unit && npm run test:native",
+    "test:unit": "node tests/run-tests.mjs && node --test tests/progress.test.mjs tests/i18n.test.mjs tests/plays.test.mjs",
+    "test:native": "node tests/native.mjs",
+    "test:browser": "node tools/browser-play.mjs .",
+    "package": "node tools/package-web.mjs",
+    "css": "node tools/css.mjs",
+    "plays": "node tools/gen-plays.mjs"
   },
+  "license": "PolyForm-Noncommercial-1.0.0",
   "devDependencies": {
     "playwright-core": "^1.62.1"
   }

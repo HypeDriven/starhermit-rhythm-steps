@@ -1,7 +1,6 @@
-// Rhythm Steps — StarHermit platform chrome strings (sign-in, invite link, controls)
-// in the nine supported locales, in the game language (js/i18n.js via ./lang.js).
-import { pickLocale } from './gfx-i18n.js';
-import { lang } from './lang.js';
+// Rhythm Steps — StarHermit account strings (sign-in, invite link, sign-out
+// notice, the leaderboard line) in the nine supported locales; the game's
+// language comes from native/i18n.ts.
 
 const BASE = {
   'en-US': {
@@ -124,10 +123,11 @@ const EXTRA = {
 };
 for (const [loc, v] of Object.entries(EXTRA)) Object.assign(BASE[loc], v);
 
-/** shText('inviteLink', { url }) in the player's locale. */
-export function shText(key, vars) {
-  const L = BASE[pickLocale(lang())] || BASE['en-US'];
+/** shText('inviteLink', { url }) in `locale` (one of the nine; others fall back to en-US). */
+export function shText(locale, key, vars) {
+  const L = BASE[locale] || BASE['en-US'];
   let s = L[key] ?? BASE['en-US'][key] ?? key;
-  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v));
   return s;
 }
+export const SH_LOCALES = Object.keys(BASE);

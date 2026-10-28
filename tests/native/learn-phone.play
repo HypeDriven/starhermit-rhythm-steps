@@ -1,0 +1,49 @@
+# viewport 390x844@3
+# Learn: "Tap on the line" by touches on the lane buttons on a phone (tools/gen-plays.mjs; generated: do not edit).
+until 300 =Play
+frames 20
+save phone-title
+touch =Learn
+until 120 Interactive lessons
+frames 10
+save phone-learn
+touch Tap on the line
+frames 413
+touch 338.3 798
+frames 41
+touch 51.8 798
+frames 41
+touch 147.3 798
+frames 41
+touch 338.3 798
+frames 11
+save phone-play
+frames 73
+touch 51.8 798
+frames 41
+touch 242.8 798
+frames 41
+touch 338.3 798
+frames 41
+touch 51.8 798
+frames 131
+touch 338.3 798
+frames 41
+touch 147.3 798
+frames 176
+touch 242.8 798
+frames 41
+touch 51.8 798
+frames 41
+touch 338.3 798
+frames 131
+touch 242.8 798
+until 2400 =Results
+frames 30
+expect =4,210
+expect =Perfect 14
+expect =Great 0
+expect =Good 0
+expect =Miss 0
+expect =Max combo 14
+save phone-results

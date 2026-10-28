@@ -1,0 +1,70 @@
+# The menus: Settings, Help, Profile, Learn, Challenges from the title; a run paused with Escape,
+# Settings and Help over the pause dialog, Resume, then Leave track back to the title.
+until 300 =Play
+frames 20
+click =Settings
+until 120 =Note speed
+frames 10
+save settings
+click =Haptics
+frames 5
+click =Back
+until 120 =Play
+click =Help
+until 120 =How to play
+frames 10
+expect Keys: D F J K
+save help
+click =Back
+until 120 =Play
+click =Profile
+until 120 =Achievements
+frames 10
+expect =Steady Hands
+save profile
+click =Back
+until 120 =Play
+click =Challenge
+until 120 =Thin Ice
+frames 10
+save challenges
+click =Back
+until 120 =Play
+click =Learn
+until 120 =Keep the streak
+frames 10
+save learn
+click =Back
+until 120 =Play
+click =Play
+until 120 =Start
+frames 10
+click =Start
+frames 300
+key Escape 1
+until 60 =Resume
+frames 10
+save pause
+click =Settings
+until 120 =Note speed
+frames 10
+save pause-settings
+key Escape 1
+until 60 =Resume
+frames 10
+click =Help
+until 120 =How to play
+frames 5
+click =Back
+until 60 =Resume
+frames 10
+click =Resume
+frames 60
+expect =Finish the track
+key Escape 1
+until 60 =Leave track
+frames 10
+click =Leave track
+until 120 =Play
+frames 10
+expect Stage 1/40

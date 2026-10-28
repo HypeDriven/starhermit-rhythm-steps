@@ -311,7 +311,18 @@
     ['Umbra Crossing', 'Cruce de la sombra', 'Schattenquerung', 'Traversée de l’ombre', 'Travessia da sombra', 'Attraversamento dell’ombra'],
     ['High Noon Circuit', 'Circuito del mediodía', 'Mittagsrunde', 'Circuit de midi', 'Circuito do meio-dia', 'Circuito di mezzogiorno'],
     ['Starfield Sprint', 'Sprint estelar', 'Sternenfeld-Sprint', 'Sprint étoilé', 'Corrida estelar', 'Scatto tra le stelle'],
-    ['Mastery: Summit of Light', 'Maestría: Cumbre de luz', 'Meisterprüfung: Gipfel des Lichts', 'Maîtrise : Sommet de lumière', 'Maestria: Cume de luz', 'Maestria: Vetta di luce']
+    ['Mastery: Summit of Light', 'Maestría: Cumbre de luz', 'Meisterprüfung: Gipfel des Lichts', 'Maîtrise : Sommet de lumière', 'Maestria: Cume de luz', 'Maestria: Vetta di luce'],
+    // ---- engine client (native/*.ts)
+    ['Combo {n}!', '¡Combo {n}!', 'Kombo {n}!', 'Combo {n} !', 'Combo {n}!', 'Combo {n}!'],
+    ['Go!', '¡Ya!', 'Los!', 'Go !', 'Já!', 'Via!'],
+    ['Gameplay', 'Juego', 'Spiel', 'Jeu', 'Jogabilidade', 'Gioco'],
+    ['StarHermit Options', 'Opciones de StarHermit', 'StarHermit-Optionen', 'Options StarHermit', 'Opções do StarHermit', 'Opzioni StarHermit'],
+    ['Sound, graphics, controls, language, reduced motion, high contrast and larger text are in the StarHermit Options.', 'Sonido, gráficos, controles, idioma, movimiento reducido, alto contraste y texto más grande están en las opciones de StarHermit.', 'Ton, Grafik, Steuerung, Sprache, reduzierte Bewegung, hoher Kontrast und größerer Text sind in den StarHermit-Optionen.', 'Le son, les graphismes, les commandes, la langue, les mouvements réduits, le contraste élevé et le texte agrandi sont dans les options StarHermit.', 'Som, gráficos, controles, idioma, movimento reduzido, alto contraste e texto maior ficam nas opções do StarHermit.', 'Audio, grafica, comandi, lingua, movimento ridotto, contrasto elevato e testo più grande sono nelle opzioni di StarHermit.'],
+    ['Open Options', 'Abrir opciones', 'Optionen öffnen', 'Ouvrir les options', 'Abrir opções', 'Apri le opzioni'],
+    ['Cancel', 'Cancelar', 'Abbrechen', 'Annuler', 'Cancelar', 'Annulla'],
+    ['Track progress', 'Progreso de la pista', 'Track-Fortschritt', 'Progression de la piste', 'Progresso da faixa', 'Avanzamento del brano'],
+    ['Track complete', 'Pista completada', 'Track geschafft', 'Piste terminée', 'Faixa concluída', 'Brano completato'],
+    ['Track ended', 'Pista terminada', 'Track beendet', 'Piste interrompue', 'Faixa encerrada', 'Brano terminato'],
   ];
 
   var COLS = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
@@ -340,4 +351,4 @@
   };
 
   root.RS_STRINGS = T;
-})(typeof self !== 'undefined' ? self : this);
+})(globalThis);

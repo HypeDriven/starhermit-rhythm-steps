@@ -1,0 +1,15 @@
+# Challenge Thin Ice with no presses: health drains to zero and the run fails (tools/gen-plays.mjs; generated: do not edit).
+until 300 =Play
+frames 20
+click =Challenge
+until 120 =Thin Ice
+frames 10
+click =Thin Ice
+until 120 =Start
+frames 10
+save challenge-setup
+click =Start
+until 1800 =Challenge failed
+frames 20
+expect =Miss 9
+save challenge-failed

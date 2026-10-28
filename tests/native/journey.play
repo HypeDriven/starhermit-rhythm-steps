@@ -1,0 +1,171 @@
+# Journey stages 1 and 2 played by keys, every note on its step (tools/gen-plays.mjs; generated: do not edit).
+until 300 =Play
+frames 30
+save title
+click =Play
+until 120 =Start
+frames 10
+save setup
+click =Start
+frames 383
+hold KeyJ
+frames 0
+release KeyJ
+frames 56
+save play-1
+frames 98
+hold KeyF
+frames 0
+release KeyF
+frames 36
+hold KeyJ
+frames 0
+release KeyJ
+frames 36
+hold KeyD
+frames 0
+release KeyD
+frames 36
+hold KeyK
+frames 0
+release KeyK
+frames 36
+hold KeyJ
+frames 0
+release KeyJ
+frames 36
+hold KeyF
+frames 0
+release KeyF
+frames 116
+hold KeyD
+frames 0
+release KeyD
+frames 116
+hold KeyJ
+frames 0
+release KeyJ
+frames 76
+hold KeyF
+frames 0
+release KeyF
+frames 276
+hold KeyK
+frames 0
+release KeyK
+frames 76
+hold KeyF
+frames 0
+release KeyF
+frames 36
+hold KeyK
+frames 0
+release KeyK
+until 2400 =Results
+frames 30
+expect =3,908
+expect =Perfect 13
+expect =Great 0
+expect =Good 0
+expect =Miss 0
+expect =Max combo 13
+save results-1
+click =Next stage
+until 120 =Start
+frames 10
+click =Start
+frames 332
+hold KeyD
+frames 0
+release KeyD
+frames 34
+hold KeyF
+frames 0
+release KeyF
+frames 110
+hold KeyD
+frames 0
+release KeyD
+frames 72
+hold KeyJ
+frames 0
+release KeyJ
+frames 72
+hold KeyF
+frames 0
+release KeyF
+frames 34
+hold KeyJ
+frames 0
+release KeyJ
+frames 33
+hold KeyK
+frames 0
+release KeyK
+frames 72
+hold KeyJ
+frames 0
+release KeyJ
+frames 110
+hold KeyD
+frames 0
+release KeyD
+frames 110
+hold KeyJ
+frames 0
+release KeyJ
+frames 109
+hold KeyD
+frames 0
+release KeyD
+frames 72
+hold KeyF
+frames 0
+release KeyF
+frames 186
+hold KeyJ
+frames 0
+release KeyJ
+frames 33
+hold KeyK
+frames 0
+release KeyK
+frames 34
+hold KeyF
+frames 0
+release KeyF
+frames 148
+hold KeyK
+frames 0
+release KeyK
+frames 34
+hold KeyD
+frames 0
+release KeyD
+frames 34
+hold KeyK
+frames 0
+release KeyK
+frames 34
+hold KeyD
+frames 0
+release KeyD
+until 2400 =Results
+frames 30
+expect =5,720
+expect =Perfect 19
+expect =Great 0
+expect =Good 0
+expect =Miss 0
+expect =Max combo 19
+save results-2
+click =Home
+until 120 =Play
+frames 10
+click =Journey
+until 120 Forty stages
+frames 10
+save journey-grid
+click =Stage 3: Crossing Lanes, 0 of 3 stars
+until 120 =Start
+expect =Stage 3: Crossing Lanes

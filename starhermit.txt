@@ -1,14 +1,37 @@
 name=Rhythm Steps
 description=Tap and hold notes in time with the music to build combos along a glowing concert causeway.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 version=1.0.0
 cover=cover.jpg
 
-# Keyboard actions (KeyboardEvent.code; remappable in Settings and via the platform controls API).
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.20.0
+engine.minor=20
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# Touch screens tap the lane buttons under the causeway or the lanes themselves.
 control.lane1=KeyD | Lane 1
 control.lane2=KeyF | Lane 2
 control.lane3=KeyJ | Lane 3
 control.lane4=KeyK | Lane 4
 control.pause=Escape | Pause / back
+engine.group.lane1=Lanes
+engine.group.pause=Track
+
+# Gamepad defaults (the browser build's mapping): face buttons and the D-pad
+# hit the lanes (A / up lane 1, B / down lane 2, X / left lane 3, Y / right
+# lane 4), Start pauses.
+engine.gamepad.lane1=South+DpadUp
+engine.gamepad.lane2=East+DpadDown
+engine.gamepad.lane3=West+DpadLeft
+engine.gamepad.lane4=North+DpadRight
+engine.gamepad.pause=Start

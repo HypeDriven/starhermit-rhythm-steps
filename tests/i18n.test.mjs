@@ -1,54 +1,61 @@
-// Localization coverage: every English key the markup and code use is
-// translated in every locale (en-GB → en-US, es-ES → es-419, fr-CA → fr-FR
-// inherit), placeholders survive, content (stages, challenges, lessons,
-// themes, practice levels, achievements) is covered, and the language
-// follows sh-language.js and switches live.
+// Every string the client draws is translated: the T("…") / N("…") keys in
+// native/*.ts, the content names (stages, difficulties, challenges, lessons,
+// themes, achievements) and the audio captions are rows of js/strings.js for
+// es-419, de-DE, fr-FR, pt-BR and it-IT (en-GB, es-ES and fr-CA fall back to
+// en-US, es-419 and fr-FR); the account strings exist in all nine locales.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { loadTables, codeKeys, htmlKeys, audit, bootI18n, LOCALES } from './i18n-common.mjs';
-import { JOURNEY_STAGES, CHALLENGES, PRACTICE_DIFFICULTIES, THEMES, LESSONS } from '../js/content.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { JOURNEY_STAGES, PRACTICE_DIFFICULTIES, CHALLENGES, LESSONS, THEMES } from '../js/content.js';
 import { ACHIEVEMENTS } from '../js/persistence.js';
-import { GFX_STRINGS } from '../js/gfx-i18n.js';
-import { shText } from '../js/sh-i18n.js';
+import { shText, SH_LOCALES } from '../js/sh-i18n.js';
 
-const ROOT = new URL('../', import.meta.url);
-const read = (p) => readFileSync(new URL(p, ROOT), 'utf8');
+const root = new URL('..', import.meta.url);
+new Function(readFileSync(new URL('js/strings.js', root), 'utf8'))();
+const TABLES = globalThis.RS_STRINGS;
+const LOCALES = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
 
-function usedKeys() {
-  const keys = new Set(htmlKeys(read('index.html')));
-  for (const f of ['js/main.js', 'js/ui.js', 'js/platform.js']) codeKeys(read(f)).forEach((k) => keys.add(k));
+function clientKeys() {
+  const keys = new Set();
+  for (const f of readdirSync(new URL('native/', root)).filter((n) => n.endsWith('.ts'))) {
+    const src = readFileSync(new URL(`native/${f}`, root), 'utf8');
+    for (const m of src.matchAll(/\b[TN]\(\s*"((?:[^"\\]|\\.)*)"/g)) keys.add(JSON.parse(`"${m[1]}"`));
+    // captions: onCaption("key") in audio.ts; check() / sections' option labels
+    for (const m of src.matchAll(/onCaption\(\s*(?:n === 0 \? )?"((?:[^"\\]|\\.)*)"/g)) keys.add(m[1]);
+    for (const m of src.matchAll(/check\("\w+", "((?:[^"\\]|\\.)*)"\)/g)) keys.add(m[1]);
+  }
   for (const s of JOURNEY_STAGES) keys.add(s.name);
-  for (const c of CHALLENGES) { keys.add(c.name); keys.add(c.description); }
   for (const d of PRACTICE_DIFFICULTIES) keys.add(d.label);
-  for (const t of Object.values(THEMES)) keys.add(t.name);
+  for (const c of CHALLENGES) { keys.add(c.name); keys.add(c.description); }
   for (const l of LESSONS) { keys.add(l.title); for (const s of l.steps) keys.add(s.text); }
+  for (const t of Object.values(THEMES)) keys.add(t.name);
   for (const a of ACHIEVEMENTS) { keys.add(a.name); keys.add(a.description); }
-  return [...keys].sort();
+  for (const k of ['Combo {n}!', 'Miss', 'Go!', 'Track complete', 'Track ended']) keys.add(k);
+  return [...keys].filter((k) => /[A-Za-z]/.test(k));
 }
 
-test('every used key is translated in every locale; placeholders intact', () => {
-  const used = usedKeys();
-  assert.ok(used.length > 250, 'keys found: ' + used.length);
-  assert.deepEqual(audit(loadTables(ROOT, 'js/strings.js', 'RS_STRINGS'), used), []);
+test('every client string is translated in every locale', () => {
+  const missing = [];
+  for (const k of clientKeys()) for (const loc of LOCALES) if (!Object.prototype.hasOwnProperty.call(TABLES[loc], k)) missing.push(`${loc}: ${k}`);
+  assert.deepEqual(missing, []);
 });
 
-test('the locale follows sh-language and switches live', () => {
-  const { I18N, events, doc } = bootI18n(ROOT, { strings: 'js/strings.js', i18n: 'js/i18n.js', global: 'RSI18N', languages: ['de-DE'] });
-  assert.equal(I18N.lang, 'de-DE');
-  assert.equal(doc.documentElement.lang, 'de-DE');
-  assert.equal(I18N.T('Paused'), 'Pausiert');
-  I18N.language.setChoice('fr-CA');
-  assert.equal(I18N.lang, 'fr-CA');
-  assert.equal(events.at(-1), 'fr-CA');
-  assert.equal(I18N.T('Score'), 'Pointage');
-  I18N.language.setChoice('en-GB');
-  assert.equal(I18N.T('Color-vision-safe palette'), 'Colour-vision-safe palette');
-  I18N.language.setChoice('it-IT');
-  assert.equal(I18N.T('Lane {n}', { n: 2 }), 'Corsia 2');
+test('translations keep their placeholders', () => {
+  for (const loc of LOCALES) {
+    for (const [k, v] of Object.entries(TABLES[loc])) {
+      const want = (k.match(/\{\w+\}/g) || []).sort().join();
+      const got = (v.match(/\{\w+\}/g) || []).sort().join();
+      assert.equal(got, want, `${loc}: ${k}`);
+    }
+  }
 });
 
-test('Graphics and StarHermit strings cover all nine locales', () => {
-  for (const l of LOCALES) assert.ok(GFX_STRINGS[l], l);
-  assert.equal(shText('signIn'), 'Sign in with StarHermit');
+test('the account strings exist in all nine locales', () => {
+  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) {
+    assert.ok(SH_LOCALES.includes(loc), loc);
+    for (const k of ['signIn', 'invite', 'inviteCopied', 'inviteLink', 'signedOut', 'lbPosting', 'lbRank', 'lbPosted', 'lbNotPosted']) {
+      assert.notEqual(shText(loc, k), k, `${loc}.${k}`);
+    }
+  }
+  assert.equal(shText('de-DE', 'lbRank', { rank: 3 }), 'Platz in der Bestenliste: #3');
 });
