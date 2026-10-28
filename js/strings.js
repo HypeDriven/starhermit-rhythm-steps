@@ -1,10 +1,9 @@
-/* Rhythm Steps — translation tables (see js/i18n.js).
+/* Rhythm Steps — translation tables (native/i18n.ts loads them as a classic script).
  * Each row: [English key, es-419, de-DE, fr-FR, pt-BR, it-IT]. en-GB, es-ES and
  * fr-CA list only where they differ from en-US, es-419 and fr-FR.
  * "Rhythm Steps" and "StarHermit" are names and stay as they are; grade letters
- * (S, A, …) and BPM stay as they are. The Graphics strings live in
- * js/gfx-i18n.js and the account strings in js/sh-i18n.js; both follow the
- * same game language.
+ * (S, A, …) and BPM stay as they are. The account strings live in
+ * js/sh-i18n.js and follow the same game language.
  */
 (function (root) {
   'use strict';
