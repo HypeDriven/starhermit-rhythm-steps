@@ -5,7 +5,7 @@
 // those presses at the ticks the game will judge them, so each script checks
 // the results' total and counts.
 //
-// Timing (measured on the 1.20.0 render check, one fixed step a frame at
+// Timing (measured on the 1.22.0 render check, one fixed step a frame at
 // 60 Hz; see tests/plays.test.mjs for the model's own checks): counting the
 // frames after the line that starts the track (`click =Start`, a lesson's
 // card, `click =Retry`), the countdown takes 144 steps and a press line
