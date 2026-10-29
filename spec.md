@@ -2,7 +2,7 @@
 
 Rhythm Steps is a four-lane rhythm game on a reactive concert causeway made of light. Notes descend the
 lanes toward a glowing judgment line: tap them on the beat, hold the long glowing bars head to tail, and
-keep the combo alive. It is a StarHermit engine **script game** (engine 1.22.0, host API 1.22,
+keep the combo alive. It is a StarHermit engine **script game** (engine 1.23.0, host API 1.22,
 `engine.minor=20`), played natively by the StarHermit client and in browsers by the engine's web runtime
 from one package. (The browser build's original design specification is in the git history before the
 engine port.)
