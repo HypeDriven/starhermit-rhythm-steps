@@ -113,7 +113,7 @@ drifting light arches, sky dust, hit pulse rings and sparks, drifting motes; por
 framing, seeded camera sway and a small shake on misses and combo milestones (both off under reduced
 motion). Five themes and the colour-vision-safe palette.
 
-Port details: punctual light intensities ÷ π (r155+ lights); `new RoomEnvironment(renderer)` prefiltered
+Port details: punctual light intensities as written (r155+ lights); `new RoomEnvironment(renderer)` prefiltered
 at 0.04 as before, given to each lit material as its own envMap at its old envMapIntensity (at minor 20
 the scene environment ignores per-material intensity); the post chain is `renderer.ao` (GTAO), `bloom`
 (0.5 / 0.4 / threshold 0.9), `grade` (linear S-curve 0.18, saturation 1.12, split tints, vignette 0.26) and

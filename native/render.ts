@@ -10,13 +10,13 @@
 // light motes, the authored portrait / landscape framing with seeded sway
 // and the tiered shake. Rendering reads the rules state only.
 //
-// From three.js r160: punctual light intensities are ÷ π (the engine's light
-// units, r155+ physical lights); the sky ShaderMaterial is WGSL; the
+// From three.js r160: punctual light intensities are the page's (r155+
+// physical lights, engine.minor 23+); the sky ShaderMaterial is WGSL; the
 // reflections are `new RoomEnvironment(renderer)` prefiltered as before, and
 // each lit material takes it as its own envMap at its old envMapIntensity (at
 // engine.minor 20 the scene's environment ignores per-material intensities,
 // as three.js r163+ does; r160 used them); the key light's fitted shadow box
-// is the engine's shadow distance and its world-unit normal bias is texels;
+// and bias are the page's;
 // the post chain (GTAOPass, UnrealBloomPass 0.5 / 0.4 / 0.9, the grade
 // before the output, FXAA / SMAA / MSAA) is renderer.ao / bloom / grade /
 // antialias; canvas textures are OffscreenCanvas. The invisible pick plane is
@@ -26,7 +26,7 @@ import {
   ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, ClampToEdgeWrapping, Color,
   CylinderGeometry, DirectionalLight, DoubleSide, DynamicDrawUsage, FogExp2, HemisphereLight, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
   MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry, PerspectiveCamera, Plane, PlaneGeometry, PMREMGenerator,
-  Points, PointsMaterial, Raycaster, RepeatWrapping, RingGeometry, RoomEnvironment, ShaderMaterial, SphereGeometry, SRGBColorSpace, TorusGeometry,
+  Points, PointsMaterial, Raycaster, RepeatWrapping, OrthographicCamera, RingGeometry, RoomEnvironment, ShaderMaterial, SphereGeometry, SRGBColorSpace, TorusGeometry,
   Vector2, Vector3, pointerToNdc, renderer, scene, type Texture,
 } from "starhermit:scene";
 import { OffscreenCanvas } from "starhermit:canvas";
@@ -54,15 +54,19 @@ renderer.toneMapping = ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 const camera = new PerspectiveCamera(50, 16 / 9, 0.1, 300);
 renderer.camera = camera;
-const keyLight = new DirectionalLight(0xbfd8ff, 2.2 / PI);
+const keyLight = new DirectionalLight(0xbfd8ff, 2.2);
 keyLight.position.set(2.5, 22, -6);
 keyLight.target.position.set(0, 0, -12);
-// the old box (lanes wide, 24 m ahead to 18 m behind the line) is the engine's view distance
-keyLight.shadow.distance = 42;
+// the page's fitted box: the lanes wide, 24 m ahead to 18 m behind the line
+const shadowCam = keyLight.shadow.camera as OrthographicCamera;
+shadowCam.left = -LANE_W * LANES / 2 - 1; shadowCam.right = LANE_W * LANES / 2 + 1;
+shadowCam.top = 24; shadowCam.bottom = -18; shadowCam.near = 4; shadowCam.far = 40;
+shadowCam.updateProjectionMatrix();
 keyLight.shadow.bias = -0.0008;
-keyLight.shadow.normalBias = 1.5;
-const hemi = new HemisphereLight(0x0a1024, 0x05070f, 0.9 / PI);
-const rimLight = new DirectionalLight(0x35e0ff, 0.3 / PI);
+keyLight.shadow.normalBias = 0.02;
+keyLight.shadow.radius = 3;
+const hemi = new HemisphereLight(0x0a1024, 0x05070f, 0.9);
+const rimLight = new DirectionalLight(0x35e0ff, 0.3);
 rimLight.position.set(0, 3, -30);
 scene.add(keyLight, keyLight.target, hemi, rimLight);
 
