@@ -388,7 +388,7 @@ function ensureEnv(): Texture | null {
   if (envMap) return envMap;
   try {
     // three r160: the 900-candela room the old page made with the renderer argument
-    envMap = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    const pageRoom = new RoomEnvironment(renderer); pageRoom.position.y = 0; /* the page's three r160 (pre-r183) builds the room at the origin */ envMap = new PMREMGenerator(renderer).fromScene(pageRoom, 0.04).texture;
   } catch (e) { console.warn("environment:", e instanceof Error ? e.message : String(e)); envMap = null; }
   return envMap;
 }
