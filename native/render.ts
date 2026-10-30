@@ -498,10 +498,12 @@ export function applyLook(next: Look): void {
     blendIntensity: 0.7, radius: 0.6, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: aoHi ? 16 : 8, resolution: b.aoRes,
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: aoHi ? 6 : 4, rings: 2, samples: aoHi ? 16 : 8, radiusExponent: 2 },
   };
-  renderer.bloom = next.bloom ? { strength: 0.5, radius: 0.4, threshold: 0.9, resolution: b.bloomRes } : null;
+  // the r160 page's UnrealBloomPass(0.5, 0.4, 0.9): bloom model r160 with its unsquared strength
+  renderer.bloom = next.bloom ? { model: "r160", strength: 0.5, radius: 0.4, threshold: 0.9, resolution: b.bloomRes } : null;
   renderer.grade = next.grade ? {
-    space: "linear", contrast: 0.18, saturation: 1.12, shadows: [0.95, 0.98, 1.06], highlights: [1.03, 1.0, 0.97], split: [0.25, 0.85],
+    space: "linear", contrastCurve: "s", contrast: 0.18, saturation: 1.12, shadows: [0.95, 0.98, 1.06], highlights: [1.03, 1.0, 0.97], split: [0.25, 0.85],
     vignette: { amount: 0.26, inner: 0.32, outer: 0.82, scale: [1, 0.9] },
+    overRange: "keep", // minor 29: mix(c, s + max(c - 1, 0), amount) as the page's grade
   } : null;
   renderer.antialias = next.antialias;
 }
