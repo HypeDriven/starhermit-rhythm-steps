@@ -24,9 +24,9 @@
 // WebGL is gone (the runtime draws wherever it runs).
 import {
   ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, ClampToEdgeWrapping, Color,
-  CylinderGeometry, DirectionalLight, DoubleSide, DynamicDrawUsage, FogExp2, HemisphereLight, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
+  CylinderGeometry, DirectionalLight, DoubleSide, FogExp2, HemisphereLight, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
   MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry, PerspectiveCamera, Plane, PlaneGeometry, PMREMGenerator,
-  Points, PointsMaterial, Raycaster, RepeatWrapping, OrthographicCamera, RingGeometry, RoomEnvironment, ShaderMaterial, SphereGeometry, SRGBColorSpace, TorusGeometry,
+  ParticleEmitter, Points, PointsMaterial, Raycaster, RepeatWrapping, OrthographicCamera, RingGeometry, RoomEnvironment, ShaderMaterial, SphereGeometry, SRGBColorSpace, TorusGeometry,
   Vector2, Vector3, pointerToNdc, renderer, scene, type Texture,
 } from "starhermit:scene";
 import { OffscreenCanvas } from "starhermit:canvas";
@@ -164,7 +164,6 @@ let beat = 0;
 let shake = 0;
 let swayPhase = 0;
 let rng: Rng = rngOf(1, "visual");
-let fxRng: Rng = rngOf(1, "sparks");
 const laneFlash = [0, 0, 0, 0];
 const laneHeld = [false, false, false, false];
 let envMap: Texture | null = null;
@@ -240,16 +239,15 @@ const arches: Mesh[] = [];
 let stars: Points;
 interface Pulse { mesh: Mesh; mat: MeshBasicMaterial; age: number; active: boolean; strength: number }
 const pulsePool: Pulse[] = [];
-let sparks: Points;
-const sparkPos = new Float32Array(SPARK_MAX * 3), sparkCol = new Float32Array(SPARK_MAX * 3), sparkVel = new Float32Array(SPARK_MAX * 3);
-const sparkLife = new Float32Array(SPARK_MAX), sparkBase = new Float32Array(SPARK_MAX * 3);
-let sparkNext = 0, sparkCap = 0, sparksDirty = false;
-let motes: Points;
-const motePos = new Float32Array(MOTE_MAX * 3);
-const moteMat = new PointsMaterial({ size: 0.16, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, sizeAttenuation: true });
+let motes: ParticleEmitter;
+const moteMat = new PointsMaterial({ size: 0.16, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, sizeAttenuation: true, fog: false });
 let moteCount = 0;
+/** Hit sparks: one emitter per colour (an emitter's colour is read for its live particles too), made as hits ask. */
+const sparkEmitters = new Map<number, ParticleEmitter>();
+let sparkCap = 0;
 const sprite = sparkSprite();
 moteMat.map = sprite;
+const sparkMat = new PointsMaterial({ size: 0.26, map: sprite, transparent: true, depthWrite: false, blending: AdditiveBlending, sizeAttenuation: true });
 
 function build(): void {
   for (let i = 0; i < LANES; i++) {
@@ -320,26 +318,18 @@ function build(): void {
     scene.add(p);
     pulsePool.push({ mesh: p, mat, age: 0, active: false, strength: 1 });
   }
-  const g = new BufferGeometry();
-  for (let i = 0; i < SPARK_MAX; i++) sparkPos[i * 3 + 1] = -50;
-  g.setAttribute("position", new BufferAttribute(sparkPos, 3).setUsage(DynamicDrawUsage));
-  g.setAttribute("color", new BufferAttribute(sparkCol, 3).setUsage(DynamicDrawUsage));
-  sparks = new Points(g, new PointsMaterial({ size: 0.26, map: sprite, vertexColors: true, transparent: true, depthWrite: false, blending: AdditiveBlending, sizeAttenuation: true }));
-  sparks.frustumCulled = false;
-  scene.add(sparks);
-  const mg = new BufferGeometry();
-  mg.setAttribute("position", new BufferAttribute(motePos, 3).setUsage(DynamicDrawUsage));
-  motes = new Points(mg, moteMat);
+  // the band of light motes along the causeway, drifting toward the camera
+  motes = new ParticleEmitter({ capacity: MOTE_MAX, material: moteMat, seed: 1, space: "local", shape: "box", extent: [15, 4.5, 45] });
+  motes.position.set(0, 5, -37);
   motes.frustumCulled = false;
   scene.add(motes);
 }
 build();
 
-/** The chart's seeded placement: pylons and caps, stars, motes; the visual and spark streams. */
+/** The chart's seeded placement: pylons and caps, stars, motes; the visual stream. */
 export function setSeed(s: number): void {
   seed = s >>> 0 || 1;
   rng = rngOf(seed, "visual");
-  fxRng = rngOf(seed, "sparks");
   swayPhase = rng.next() * PI * 2;
   const mtx = new Matrix4(), capM = new Matrix4();
   const envRng = rngOf(seed, "env");
@@ -369,16 +359,9 @@ export function setSeed(s: number): void {
     pos[i * 3 + 2] = -40 - starRng.next() * 200;
   }
   (stars.geometry.getAttribute("position") as BufferAttribute).needsUpdate = true;
-  const mr = rngOf(seed, "motes");
-  for (let i = 0; i < MOTE_MAX; i++) {
-    motePos[i * 3] = (mr.next() - 0.5) * 30;
-    motePos[i * 3 + 1] = 0.5 + mr.next() * 9;
-    motePos[i * 3 + 2] = 8 - mr.next() * 90;
-  }
-  (motes.geometry.getAttribute("position") as BufferAttribute).needsUpdate = true;
-  sparkLife.fill(0);
-  for (let i = 0; i < SPARK_MAX; i++) sparkPos[i * 3 + 1] = -50;
-  sparksDirty = true;
+  motes.seed = seed;
+  setMotes();
+  clearSparks();
   for (const p of pulsePool) { p.active = false; p.mesh.visible = false; }
   for (let i = 0; i < arches.length; i++) arches[i]!.position.z = -18 - i * 16;
   shake = 0;
@@ -471,7 +454,7 @@ export function applyLook(next: Look): void {
   const shadowsOn = next.shadows > 0;
   renderer.shadowMap.enabled = shadowsOn;
   keyLight.castShadow = shadowsOn;
-  if (shadowsOn) keyLight.shadow.mapSize = next.shadows;
+  if (shadowsOn) keyLight.shadow.mapSize = next.shadows; // the level's size: the engine keeps what the game sets
   const envOn = next.detailed;
   sky.visible = envOn;
   floor.visible = envOn;
@@ -482,24 +465,20 @@ export function applyLook(next: Look): void {
   for (let i = 0; i < arches.length; i++) arches[i]!.visible = envOn || i < 4;
   applyLaneLook();
   const hi = next.particles === "high";
-  sparks.visible = hi;
-  motes.visible = hi;
-  sparkCap = Math.min(SPARK_MAX, b.sparks);
-  moteCount = Math.min(MOTE_MAX, b.motes);
-  for (let i = sparkCap; i < SPARK_MAX; i++) { sparkLife[i] = 0; sparkPos[i * 3 + 1] = -50; }
-  if (sparkNext >= sparkCap) sparkNext = 0;
-  sparks.geometry.setDrawRange(0, sparkCap);
-  motes.geometry.setDrawRange(0, moteCount);
-  if (!hi) sparkLife.fill(0);
+  moteCount = hi ? Math.min(MOTE_MAX, b.motes) : 0;
+  setMotes();
+  const cap = hi ? Math.min(SPARK_MAX, b.sparks) : 0;
+  if (cap !== sparkCap) { for (const e of sparkEmitters.values()) { scene.remove(e); e.dispose(); } sparkEmitters.clear(); }
+  sparkCap = cap;
   applyReflections();
   // post: GTAOPass, UnrealBloomPass(…, 0.5, 0.4, 0.9), the grade before the output, AA
-  const aoHi = next.ao === "high";
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: 0.7, radius: 0.6, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: aoHi ? 16 : 8, resolution: b.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: aoHi ? 6 : 4, rings: 2, samples: aoHi ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, aoHi = !!ao && ao.resolution >= 1; // the engine's AoQuality: resolution 1 is "high"
+  renderer.ao = !ao ? null : {
+    blendIntensity: 0.7, radius: 0.6, distanceExponent: 1.5, thickness: 1.0, scale: 1.0, samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: aoHi ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // the r160 page's UnrealBloomPass(0.5, 0.4, 0.9): bloom model r160 with its unsquared strength
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.5, radius: 0.4, threshold: 0.9, resolution: b.bloomRes } : null;
+  renderer.bloom = next.bloom !== null ? { model: "r160", strength: 0.5, radius: 0.4, threshold: 0.9, resolution: next.bloom } : null;
   renderer.grade = next.grade ? {
     space: "linear", contrastCurve: "s", contrast: 0.18, saturation: 1.12, shadows: [0.95, 0.98, 1.06], highlights: [1.03, 1.0, 0.97], split: [0.25, 0.85],
     vignette: { amount: 0.26, inner: 0.32, outer: 0.82, scale: [1, 0.9] },
@@ -544,7 +523,7 @@ export function setTheme(t: Theme, cvdPalette: boolean): void {
   hdr(moteMat.color, t.laneEdge, 1.2);
 }
 export function setOptions(o: { reducedMotion: boolean; cameraSway: boolean; noteSpeed: number; mirror: boolean }): void {
-  reducedMotion = o.reducedMotion;
+  if (reducedMotion !== o.reducedMotion) { reducedMotion = o.reducedMotion; setMotes(); }
   cameraSway = o.cameraSway;
   noteSpeed = o.noteSpeed || 1;
   mirror = o.mirror;
@@ -586,53 +565,30 @@ function spawnPulse(lane: number, color: number, strength: number): void {
 }
 function spawnSparks(lane: number, hex: number, n: number): void {
   if (look?.particles !== "high" || reducedMotion || sparkCap <= 0) return;
-  const c = new Color(hex).multiplyScalar(2.2);
-  const x0 = laneX(lane);
-  for (let k = 0; k < n; k++) {
-    const i = sparkNext;
-    sparkNext = (sparkNext + 1) % sparkCap;
-    const a = fxRng.next() * PI * 2;
-    const sp = 1.5 + fxRng.next() * 3;
-    sparkPos[i * 3] = x0 + Math.cos(a) * 0.3;
-    sparkPos[i * 3 + 1] = 0.25;
-    sparkPos[i * 3 + 2] = RECEPTOR_Z + Math.sin(a) * 0.3;
-    sparkVel[i * 3] = Math.cos(a) * sp * 0.7;
-    sparkVel[i * 3 + 1] = 3 + fxRng.next() * 4;
-    sparkVel[i * 3 + 2] = Math.sin(a) * sp * 0.5 - 0.8;
-    sparkLife[i] = 0.5 + fxRng.next() * 0.4;
-    sparkBase[i * 3] = c.r; sparkBase[i * 3 + 1] = c.g; sparkBase[i * 3 + 2] = c.b;
+  let e = sparkEmitters.get(hex);
+  if (!e) {
+    e = new ParticleEmitter({
+      capacity: sparkCap, material: sparkMat, seed: (seed ^ hex) >>> 0, space: "local", shape: "box", extent: [0.3, 0, 0.3],
+      color: new Color(hex).multiplyScalar(2.2), life: [0.5, 0.9], opacity: [1, 1, 0],
+      velocity: [0, 5, -0.8], velocitySpread: [2.2, 2, 1.6], gravity: [0, -9.8, 0],
+    });
+    e.frustumCulled = false;
+    scene.add(e);
+    sparkEmitters.set(hex, e);
   }
+  e.burst(n, [laneX(lane), 0.25, RECEPTOR_Z]);
 }
-function updateParticles(dt: number, animated: boolean): void {
-  if (!sparks.visible) return;
-  let any = false;
-  for (let i = 0; i < sparkCap; i++) {
-    if (sparkLife[i]! <= 0) continue;
-    any = true;
-    sparkLife[i]! -= dt;
-    const j = i * 3;
-    if (sparkLife[i]! <= 0) { sparkPos[j + 1] = -50; sparkCol[j] = sparkCol[j + 1] = sparkCol[j + 2] = 0; continue; }
-    sparkVel[j + 1]! -= 9.8 * dt;
-    sparkPos[j]! += sparkVel[j]! * dt;
-    sparkPos[j + 1] = Math.max(0.08, sparkPos[j + 1]! + sparkVel[j + 1]! * dt);
-    sparkPos[j + 2]! += sparkVel[j + 2]! * dt;
-    const f = Math.min(1, sparkLife[i]! * 2.2);
-    sparkCol[j] = sparkBase[j]! * f; sparkCol[j + 1] = sparkBase[j + 1]! * f; sparkCol[j + 2] = sparkBase[j + 2]! * f;
-  }
-  if (any || sparksDirty) {
-    (sparks.geometry.getAttribute("position") as BufferAttribute).needsUpdate = true;
-    (sparks.geometry.getAttribute("color") as BufferAttribute).needsUpdate = true;
-  }
-  sparksDirty = any;
-  if (animated) {
-    for (let i = 0; i < moteCount; i++) {
-      const j = i * 3;
-      motePos[j + 2]! += dt * 2.2;
-      motePos[j + 1]! += Math.sin(time * 0.7 + i) * dt * 0.08;
-      if (motePos[j + 2]! > 10) motePos[j + 2]! -= 92;
-    }
-    (motes.geometry.getAttribute("position") as BufferAttribute).needsUpdate = true;
-  }
+function clearSparks(): void { for (const e of sparkEmitters.values()) e.clear(); }
+/** The motes at the look's budget (from applyLook, a new chart and reduced motion). */
+function setMotes(): void {
+  motes.visible = moteCount > 0;
+  motes.clear();
+  if (!moteCount) { motes.rate = 0; return; }
+  const still = reducedMotion || !look?.animated;
+  motes.set(still
+    ? { velocity: [0, 0, 0], velocitySpread: 0, life: 3600, rate: 0 }
+    : { velocity: [0, 0, 2.2], velocitySpread: [0, 0.06, 0], life: [2, 26], rate: moteCount / 14 });
+  motes.burst(moteCount);
 }
 
 // -- the frame -----------------------------------------------------------------------------------
@@ -714,7 +670,6 @@ export function update(view: View | null, dt: number, width: number, height: num
     p.mesh.scale.setScalar(1 + p.age * 5 * p.strength);
     p.mat.opacity = 0.85 * (1 - p.age);
   }
-  updateParticles(dt, animated);
   if (animated) {
     for (let i = 0; i < arches.length; i++) {
       const a = arches[i]!;

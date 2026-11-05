@@ -113,18 +113,14 @@ interface ProgressApi {
   readForeign(text: string | null | undefined): { progress: Progress; options: Partial<Options> } | null;
   isLegacyKey(key: string): boolean;
 }
-export interface StemRenderer {
-  compose: { loopMs: number; beatMs: number; stepMs: number };
-  length: number; rate: number;
-  stems: Record<string, Float32Array>;
-  step(budget?: number): boolean;
-  readonly done: boolean;
-}
+export interface MusicVoice { t: number; kind: "blip" | "noise"; type?: "sine" | "sawtooth" | "triangle"; freq?: number; freqEnd?: number | null; dur: number; filter?: number; q?: number }
+export interface Composition { loopMs: number; beatMs: number; stepMs: number }
 interface MusicApi {
   STEMS: string[];
-  stemRenderer(chart: Chart, rate?: number): StemRenderer;
+  compose(chart: Chart): Composition;
+  events(c: Composition): Record<string, MusicVoice[]>;
   layerGains(intensity: number): Record<string, number>;
-  ambience(kind: string, rate?: number, seed?: number): Float32Array;
+  AMBIENT_CUTOFF: Record<string, number>;
 }
 
 export const Rules = RulesJs as unknown as RulesApi;

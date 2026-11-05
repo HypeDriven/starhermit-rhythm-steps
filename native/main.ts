@@ -22,7 +22,7 @@
 // number, the old 600 ms), and the music follows the step clock (audio.ts).
 // The causeway is drawn between steps by the frame's interpolation.
 import "./i18n.ts";
-import { clipboard, frame, onFixedUpdate, onFocus, onRender, onResume, onStart, onSuspend, onUpdate, setFixedRate } from "starhermit:engine";
+import { clipboard, frame, onFixedUpdate, onFocus, onRender, onResume, onStart, onSuspend, onUpdate, setFixedRate, levelSettings } from "starhermit:engine";
 import { onAction, onPointerButton, onTouch, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn } from "starhermit:platform";
@@ -82,7 +82,6 @@ export const app = {
   lb: null as platform.Posted | "posting" | null,
   judgment: null as null | { grade: string; extra: string; frame: number },
   caption: null as null | { text: string; frame: number },
-  toasts: [] as { text: () => string; until: number }[],
   accountNote: null as (() => string) | null,
   /** Score Chase inputs. */
   chaseSeed: "",
@@ -99,8 +98,7 @@ let announced = "";
 export function announce(text: string): void { if (text) announced = text; }
 export function click(kind: "move" | "confirm" | "back" | "error" = "confirm"): void { audio.playUi(kind); }
 export function toast(text: () => string, seconds = 2.6): void {
-  app.toasts.push({ text, until: frame().time + seconds });
-  if (app.toasts.length > 3) app.toasts.shift();
+  ui.toast!(text(), { duration: seconds, style: ["toast", "toast-text"], dismissible: false });
 }
 export const options = (): typeof platform.options => platform.options;
 export function today(): string { return new Date(platform.nowMs()).toISOString().slice(0, 10); }
@@ -521,7 +519,7 @@ export function copyInvite(): void {
   const link = platform.inviteLink();
   if (!link) return;
   try { clipboard.writeText(link); toast(() => S("inviteCopied")); }
-  catch { toast(() => S("inviteLink", { url: link }), 8); }
+  catch { toast(() => S("inviteLink", { link }), 8); }
 }
 export function signIn(): void { click(); void requestSignIn().catch(() => undefined); }
 export function setGuestName(name: string): void {
@@ -653,17 +651,16 @@ onFocus((focused) => { if (!focused) { for (const s of [...laneSources.keys()]) 
 // ------------------------------------------------------------------ captions
 audio.setCaptionHandler((key: string, vars?: Vars) => {
   if (!options().captions) return;
-  app.caption = { text: T(key, vars ?? null), frame: frame().frame };
+  app.caption = { text: /^\d+$/.test(key) ? key : T(key, vars ?? null), frame: frame().frame }; // the countdown's digits have no row
 });
 
 // ------------------------------------------------------------------ boot and lifecycle
 let lookKey = "";
 function applyLook(): void {
   const f = frame();
-  const k = `${f.quality}:${f.levelIndex}`;
-  if (k === lookKey) return;
-  lookKey = k;
-  render.applyLook(lookFor(f.quality, f.levelIndex));
+  if (f.level === lookKey) return;
+  lookKey = f.level;
+  render.applyLook(lookFor(levelSettings(f.level)));
 }
 function applyOptions(): void {
   render.setOptions({ reducedMotion: ui.preferences().reducedMotion, cameraSway: options().cameraSway, noteSpeed: options().noteSpeed, mirror: options().leftHanded });
@@ -673,6 +670,7 @@ function applyOptions(): void {
 onStart(() => {
   setFixedRate(STEP_HZ);
   initStyles();
+  audio.loadSfx();
   platform.initPlatform();
   applyLook();
   render.setSeed(1);
@@ -731,7 +729,6 @@ onUpdate((dt) => {
 let lastReduced = false;
 onRender((alpha) => {
   const f = frame();
-  app.toasts = app.toasts.filter((t) => t.until > f.time);
   const s = app.session;
   const a = app.phase === "active" ? Math.min(1, Math.max(0, alpha)) : 0;
   const songMs = tickOf(app.step) + (app.phase === "active" ? a * (1000 / STEP_HZ) : 0);

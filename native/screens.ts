@@ -34,10 +34,8 @@ import {
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; wide: boolean; phone: boolean; short: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale || 1;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
+  const v = ui.viewport!();
+  const sc = v.scale, lw = Math.max(1, v.width), lh = Math.max(1, v.height);
   return { lw, lh, sc, wide: lw >= 1024, phone: lw <= 700 && lh >= lw, short: lh <= 500 && lw > lh };
 }
 const lastSize = new Map<string, number>();
@@ -82,20 +80,9 @@ function button(b: Btn, width: number | null = null): void {
 }
 /** Buttons at their own widths in rows that wrap at `width` (.row: flex-wrap). */
 function flow(label: string, list: Btn[], width: number, gap = 10, justify: "start" | "center" = "start"): void {
-  const rows: Btn[][] = [[]];
-  let used = 0;
-  const bw = (b: Btn): number => Math.min(width, btnWidth(b));
-  for (const b of list) {
-    const w = bw(b);
-    if (rows[rows.length - 1]!.length && used + gap + w > width) { rows.push([]); used = 0; }
-    used += (rows[rows.length - 1]!.length ? gap : 0) + w;
-    rows[rows.length - 1]!.push(b);
-  }
-  ui.column(label, () => {
-    rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => {
-      for (const b of row) button(b, bw(b) >= width ? width : null);
-    }, { spacing: gap, width, justify }));
-  }, { spacing: gap, width });
+  ui.row(label, () => {
+    for (const b of list) button(b, btnWidth(b) >= width ? width : null);
+  }, { wrap: true, width, gap, justify });
 }
 /** Buttons in `cols` equal columns (CSS grid). */
 function gridOf(label: string, list: Btn[], width: number, cols: number, gap = 10): void {
@@ -158,7 +145,6 @@ export function drawScreens(): void {
       screenFor(app.overlay, L);
     } else pauseDialog(L);
   }
-  toasts(L);
   for (const fn of acts.splice(0)) fn();
   const f = frame();
   if (app.focusNext) {
@@ -306,7 +292,7 @@ function journeyScreen(w: number): void {
             content: () => {
               ui.style("stage-num").label(String(i + 1));
               ui.style("stage-name", { text: { align: "center" } }).paragraph(T(s.name), cw - 16);
-              ui.style("stage-stars").label("★".repeat(stars) + "☆".repeat(3 - stars));
+              ui.style("stage-stars", { text: { font: "StarHermit Emoji" } }).label("★".repeat(stars) + "☆".repeat(3 - stars));
             },
           };
           if (locked) opts.disabled = true;
@@ -581,7 +567,7 @@ function profileScreen(w: number): void {
         para(T(a.name), w - 40, got ? "ach-name" : "ach-locked-name", `ach-${i}-name`);
         para(T(a.description), w - 40, got ? "ach-desc" : "ach-locked-desc", `ach-${i}-desc`);
       }, { spacing: 2, width: w - 30 });
-      ui.style("ach-name").label(got ? "✓" : "");
+      ui.style("ach-name", { text: { font: "StarHermit Emoji" } }).label(got ? "✓" : "");
     }, { style: "ach-row", width: w, align: "center" });
   }), { spacing: 0, width: w });
   flow("profile-back", [homeBack()], w);
@@ -646,8 +632,7 @@ function playfield(L: Layout): void {
     ui.place("hud-top", { anchor: "top-start", x: pad, y: 8 }, () => {
       ui.row("hud-row", () => {
         ui.column("hud-obj", () => {
-          const t = textWidth(objective_, "hud-objective-text") <= ow - 26 ? objective_ : clip(objective_, ow - 26, "hud-objective-text");
-          ui.style("hud-objective-text").id("hud-objective").label(t);
+          ui.style("hud-objective-text", { width: ow - 26, text: { overflow: "ellipsis" } }).id("hud-objective").label(objective_);
         }, { style: "hud-objective", width: objW(ow) });
         bar(Math.max(40, L.lw - 2 * pad - objW(ow) - 44 - 24));
         pauseBtn();
@@ -695,11 +680,6 @@ function playfield(L: Layout): void {
     ui.place("caption", { anchor: "bottom", y: L.short ? 56 : 96 }, () => ui.style("caption-text").id("caption").label(c.text), { style: "caption" });
   }
 }
-function clip(text: string, width: number, cls: string): string {
-  let t = text;
-  while (t.length > 1 && textWidth(`${t}…`, cls) > width) t = t.slice(0, -1);
-  return `${t.trimEnd()}…`;
-}
 function pauseBars(): void {
   ui.widget("", {
     role: "none", size: { width: 12, height: 14 },
@@ -733,11 +713,5 @@ function laneTray(L: Layout): void {
       }
     }, { spacing: g });
   });
-}
-function toasts(L: Layout): void {
-  if (!app.toasts.length) return;
-  ui.place("toasts", { anchor: "bottom", y: L.short ? 60 : 90 }, () => {
-    app.toasts.forEach((t, i) => ui.column(`toast-${i}`, () => para(t.text(), Math.min(420, L.lw - 60), "toast-text", `toast-${i}-t`, "center"), { style: "toast" }));
-  }, { spacing: 6, align: "center" });
 }
 

@@ -1,18 +1,16 @@
 // Every string the client draws is translated: the T("…") / N("…") keys in
 // native/*.ts, the content names (stages, difficulties, challenges, lessons,
-// themes, achievements) and the audio captions are rows of js/strings.js for
-// es-419, de-DE, fr-FR, pt-BR and it-IT (en-GB, es-ES and fr-CA fall back to
-// en-US, es-419 and fr-FR); the account strings exist in all nine locales.
+// themes, achievements) and the audio captions are rows of assets/strings.json
+// for es-419, de-DE, fr-FR, pt-BR and it-IT (en-GB, es-ES and fr-CA fall back
+// through the engine's chain); the account strings are the engine's.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { JOURNEY_STAGES, PRACTICE_DIFFICULTIES, CHALLENGES, LESSONS, THEMES } from '../js/content.js';
 import { ACHIEVEMENTS } from '../js/persistence.js';
-import { shText, SH_LOCALES } from '../js/sh-i18n.js';
 
 const root = new URL('..', import.meta.url);
-new Function(readFileSync(new URL('js/strings.js', root), 'utf8'))();
-const TABLES = globalThis.RS_STRINGS;
+const TABLES = JSON.parse(readFileSync(new URL('assets/strings.json', root), 'utf8'));
 const LOCALES = ['es-419', 'de-DE', 'fr-FR', 'pt-BR', 'it-IT'];
 
 function clientKeys() {
@@ -48,14 +46,4 @@ test('translations keep their placeholders', () => {
       assert.equal(got, want, `${loc}: ${k}`);
     }
   }
-});
-
-test('the account strings exist in all nine locales', () => {
-  for (const loc of ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT']) {
-    assert.ok(SH_LOCALES.includes(loc), loc);
-    for (const k of ['signIn', 'invite', 'inviteCopied', 'inviteLink', 'signedOut', 'lbPosting', 'lbRank', 'lbPosted', 'lbNotPosted']) {
-      assert.notEqual(shText(loc, k), k, `${loc}.${k}`);
-    }
-  }
-  assert.equal(shText('de-DE', 'lbRank', { rank: 3 }), 'Platz in der Bestenliste: #3');
 });

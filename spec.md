@@ -21,8 +21,8 @@ engine port.)
 | `native/i18n.ts`, `native/style.ts`, `native/game.ts` | Strings, the UI style sheet and theme, typed imports of `js/`. |
 | `js/rules.js`, `js/content.js`, `js/rng.js`, `js/persistence.js` | The browser build's deterministic rules, content generator and save model, unchanged. |
 | `js/progress.js` | What the engine save holds; merging; migrating the old cloud slot and settings. |
-| `js/music.js` | The seeded composition rendered into five looping stems; the ambience bed. |
-| `js/strings.js`, `js/sh-i18n.js` | Translation tables (nine locales) and the account strings. |
+| `js/music.js` | The seeded composition: the voices of five looping stems. |
+| `assets/strings.json` | Translation tables (nine locales) for the engine's `strings`; account lines are the engine's `starhermit.*`. |
 | `score-script.js` | Platform server script: range-checks a posted total for the `high-score` board (unchanged). |
 | `server.js` | The replay/score validator module the rules tests exercise (not packaged, unchanged). |
 | `sfx/*.opus` | Authored one-shots (`sfx/manifest.json` lists their events). |
@@ -117,15 +117,14 @@ Port details: punctual light intensities as written (r155+ lights); `new RoomEnv
 at 0.04 as before, given to each lit material as its own envMap at its old envMapIntensity (at minor 20
 the scene environment ignores per-material intensity); the post chain is `renderer.ao` (GTAO), `bloom`
 (0.5 / 0.4 / threshold 0.9), `grade` (linear S-curve 0.18, saturation 1.12, split tints, vignette 0.26) and
-`antialias`. Graphics tiers follow the runtime's quality (Low: Lambert, no shadows or post, static
-background, plain detail; Balanced: standard materials, 512 shadows, bloom, grade, FXAA, sparks, animated,
-detailed; High: physical, 1024 shadows, GTAO, SMAA; Ultra: 2048 shadows, full GTAO, MSAA); spark and mote
-counts scale with the level. Render scale, adaptive resolution and the frame-rate limit are the runtime's.
+`antialias`. Art tiers follow the runtime's quality (Low: Lambert, static background, plain detail; Balanced: standard
+materials, sparks, animated, detailed; High, Ultra: physical); shadows, AO, bloom, grade and anti-aliasing
+come from the engine's `levelSettings()` for the level, and spark and mote counts scale with its particle budget. Render scale, adaptive resolution and the frame-rate limit are the runtime's.
 
 ## Audio
 
 Authored one-shots per event (hit grades, combo milestone every 25, hold ticks, miss, empty hit, countdown,
-results fanfares, UI clicks), loaded one at a time once the mixer runs. The music is the old seeded
+results fanfares, UI clicks), all loaded at start. The music is the old seeded
 composition (kick, bass, hat, snare, arpeggio on an eighth-note grid), rendered per chart into five looping
 stems and played as sample-aligned buffer sources on the synthesis graph; their gains follow the combo
 intensity (the old adaptive layers). The theme's ambience bed is a rendered loop. Buses: effects (hits,

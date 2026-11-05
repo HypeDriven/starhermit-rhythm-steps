@@ -1,0 +1,65 @@
+# Tier bench: Practice Steady (holds and chords) by keys, from practice-holds.play.
+until 300 =Play
+frames 20
+click =Practice
+until 120 Unranked
+frames 10
+click =Steady — 108 BPM
+until 120 =Start
+frames 10
+click =Start
+frames 276
+hold KeyK
+frames 35
+release KeyK
+frames 28
+hold KeyF
+measure start
+frames 0
+release KeyF
+frames 29
+hold KeyK
+frames 0
+release KeyK
+frames 30
+hold KeyD
+frames 0
+release KeyD
+frames 129
+hold KeyJ
+frames 0
+release KeyJ
+frames 29
+hold KeyD
+frames 0
+release KeyD
+frames 30
+hold KeyJ
+frames 0
+release KeyJ
+frames 96
+hold KeyF
+frames 0
+release KeyF
+frames 129
+hold KeyD
+frames 31
+hold KeyF
+frames 0
+release KeyF
+frames 16
+release KeyD
+frames 12
+hold KeyK
+frames 0
+release KeyK
+frames 29
+hold KeyD
+frames 0
+release KeyD
+frames 29
+hold KeyK
+frames 0
+release KeyK
+frames 30
+measure stop
