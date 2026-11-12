@@ -180,3 +180,11 @@ misses, lesson steps and results. High contrast, larger text and reduced motion 
 - Achievements are save-local (as before); the platform has no achievement records for this game.
 - Score posting uses `score-script.js` with the client's total, range-checked (unchanged from the browser
   build, per the solo-leaderboard policy); replay validation in `server.js` is not deployed.
+
+<!-- regional-localization:start -->
+
+### Regional interface languages
+
+The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `zh-HK`, `yue-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `ta-SG`, `da-DE`, `lb-BE`, `oc-FR`, `sl-IT`, `fur-IT`, `oc-IT`, `ru-FI`, `gl-ES`, `ru-EE`, `su-ID`, `km-VN`, `co-FR`, `eu-FR`, `ca-FR`, `ca-IT`, `ca-ES`, `eu-ES`, `bew-ID`.
+
+<!-- regional-localization:end -->

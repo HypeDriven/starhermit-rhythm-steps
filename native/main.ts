@@ -1,3 +1,4 @@
+import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Rhythm Steps on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
 // the engine's web runtime. The rules (js/rules.js), the content
@@ -727,7 +728,7 @@ onUpdate((dt) => {
   audio.update();
 });
 let lastReduced = false;
-onRender((alpha) => {
+onRender(__l10nRender((alpha) => {
   const f = frame();
   const s = app.session;
   const a = app.phase === "active" ? Math.min(1, Math.max(0, alpha)) : 0;
@@ -742,5 +743,9 @@ onRender((alpha) => {
     try { ui.announce(announced.slice(0, 500)); } catch { /* the reader is busy */ }
     announced = "";
   }
-});
+}));
 
+
+// localization-runtime:menu
+import { installLanguageMenu as __installLanguageMenu } from "./l10n/menu.ts";
+__installLanguageMenu(false);
