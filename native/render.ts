@@ -23,12 +23,9 @@
 // a ray–plane intersection. The 2D fallback renderer for browsers without
 // WebGL is gone (the runtime draws wherever it runs).
 import {
-  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, ClampToEdgeWrapping, Color,
-  CylinderGeometry, DirectionalLight, DoubleSide, FogExp2, HemisphereLight, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
-  MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry, PerspectiveCamera, Plane, PlaneGeometry, PMREMGenerator,
-  ParticleEmitter, Points, PointsMaterial, Raycaster, RepeatWrapping, OrthographicCamera, RingGeometry, RoomEnvironment, ShaderMaterial, SphereGeometry, SRGBColorSpace, TorusGeometry,
-  Vector2, Vector3, pointerToNdc, renderer, scene, type Texture,
+  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, ClampToEdgeWrapping, Color, CylinderGeometry, DirectionalLight, DoubleSide, FogExp2, HemisphereLight, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, OctahedronGeometry, PerspectiveCamera, Plane, PlaneGeometry, PMREMGenerator, Points, PointsMaterial, Raycaster, RepeatWrapping, OrthographicCamera, RingGeometry, RoomEnvironment, ShaderMaterial, SphereGeometry, SRGBColorSpace, TorusGeometry, Vector2, Vector3, pointerToNdc, renderer, scene, type Texture,
 } from "starhermit:scene";
+import { GPUParticleEmitter } from "starhermit:particles";
 import { OffscreenCanvas } from "starhermit:canvas";
 import { makeRng, streamSeed } from "../js/rng.js";
 import { Content, type Note, type Theme } from "./game.ts";
@@ -239,11 +236,11 @@ const arches: Mesh[] = [];
 let stars: Points;
 interface Pulse { mesh: Mesh; mat: MeshBasicMaterial; age: number; active: boolean; strength: number }
 const pulsePool: Pulse[] = [];
-let motes: ParticleEmitter;
+let motes: GPUParticleEmitter;
 const moteMat = new PointsMaterial({ size: 0.16, transparent: true, opacity: 0.55, depthWrite: false, blending: AdditiveBlending, sizeAttenuation: true, fog: false });
 let moteCount = 0;
 /** Hit sparks: one emitter per colour (an emitter's colour is read for its live particles too), made as hits ask. */
-const sparkEmitters = new Map<number, ParticleEmitter>();
+const sparkEmitters = new Map<number, GPUParticleEmitter>();
 let sparkCap = 0;
 const sprite = sparkSprite();
 moteMat.map = sprite;
@@ -319,7 +316,7 @@ function build(): void {
     pulsePool.push({ mesh: p, mat, age: 0, active: false, strength: 1 });
   }
   // the band of light motes along the causeway, drifting toward the camera
-  motes = new ParticleEmitter({ capacity: MOTE_MAX, material: moteMat, seed: 1, space: "local", shape: "box", extent: [15, 4.5, 45] });
+  motes = new GPUParticleEmitter({ capacity: MOTE_MAX, material: moteMat, seed: 1, space: "local", shape: "box", extent: [15, 4.5, 45] });
   motes.position.set(0, 5, -37);
   motes.frustumCulled = false;
   scene.add(motes);
@@ -359,7 +356,7 @@ export function setSeed(s: number): void {
     pos[i * 3 + 2] = -40 - starRng.next() * 200;
   }
   (stars.geometry.getAttribute("position") as BufferAttribute).needsUpdate = true;
-  motes.seed = seed;
+  motes.set({ seed: seed });
   setMotes();
   clearSparks();
   for (const p of pulsePool) { p.active = false; p.mesh.visible = false; }
@@ -567,7 +564,7 @@ function spawnSparks(lane: number, hex: number, n: number): void {
   if (look?.particles !== "high" || reducedMotion || sparkCap <= 0) return;
   let e = sparkEmitters.get(hex);
   if (!e) {
-    e = new ParticleEmitter({
+    e = new GPUParticleEmitter({
       capacity: sparkCap, material: sparkMat, seed: (seed ^ hex) >>> 0, space: "local", shape: "box", extent: [0.3, 0, 0.3],
       color: new Color(hex).multiplyScalar(2.2), life: [0.5, 0.9], opacity: [1, 1, 0],
       velocity: [0, 5, -0.8], velocitySpread: [2.2, 2, 1.6], gravity: [0, -9.8, 0],
@@ -583,7 +580,7 @@ function clearSparks(): void { for (const e of sparkEmitters.values()) e.clear()
 function setMotes(): void {
   motes.visible = moteCount > 0;
   motes.clear();
-  if (!moteCount) { motes.rate = 0; return; }
+  if (!moteCount) { motes.set({ rate: 0 }); return; }
   const still = reducedMotion || !look?.animated;
   motes.set(still
     ? { velocity: [0, 0, 0], velocitySpread: 0, life: 3600, rate: 0 }

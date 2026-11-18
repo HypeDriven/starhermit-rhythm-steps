@@ -153,7 +153,7 @@ let pause: ui.Rect | null = null;
 export function laneRects(): (ui.Rect | null)[] { return lanes; }
 export function pauseRect(): ui.Rect | null { return pause; }
 
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   lanes = [null, null, null, null];
   pause = null;
@@ -738,3 +738,10 @@ function laneTray(L: Layout): void {
   });
 }
 
+
+export function drawScreens(): void {
+  if (app.screen !== "help") { drawScreensImmediate(); return; }
+  const actions = ["lane1","lane2","lane3","lane4","pause"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
+}
