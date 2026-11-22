@@ -2,8 +2,8 @@
 
 Rhythm Steps is a four-lane rhythm game on a reactive concert causeway made of light. Notes descend the
 lanes toward a glowing judgment line: tap them on the beat, hold the long glowing bars head to tail, and
-keep the combo alive. It is a StarHermit engine **script game** (engine 1.44.1, host API 1.44,
-`engine.minor=44`), played natively by the StarHermit client and in browsers by the engine's web runtime
+keep the combo alive. It is a StarHermit engine **script game** (engine 1.47.0, host API 1.47,
+`engine.minor=47`), played natively by the StarHermit client and in browsers by the engine's web runtime
 from one package. (The browser build's original design specification is in the git history before the
 engine port.)
 
@@ -191,8 +191,12 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 Cosmetic particle emitters use native GPU particles with automatic CPU fallback on devices or graphics tiers without GPU particle support.
 
-## Engine 1.44.1
+## Engine 1.47.0
 
-Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the WebGPU-only StarHermit 1.47.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
+
+Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
+
+Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
