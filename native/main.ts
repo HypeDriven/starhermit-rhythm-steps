@@ -1,3 +1,4 @@
+import { showCursor } from "./cursor.ts";
 import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Rhythm Steps on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
@@ -669,6 +670,7 @@ function applyOptions(): void {
 }
 
 onStart(() => {
+  showCursor();
   setFixedRate(STEP_HZ);
   initStyles();
   audio.loadSfx();
