@@ -210,6 +210,9 @@ const floor = new Mesh(new PlaneGeometry(400, 400), floorMat);
 floor.rotation.x = -PI / 2;
 floor.position.set(0, -1.2, -60);
 floor.receiveShadow = true;
+// Still scenery (host API 1.49): the floor, lanes, lane edges and the seeded pylons and caps (placed per chart).
+// The lanes move only when Mirror flips them, written on change and signalled (matrixWorldNeedsUpdate).
+floor.movable = false;
 scene.add(floor);
 let gridTex: Texture | null = null;
 let laneTex: Texture | null = null;
@@ -252,6 +255,7 @@ function build(): void {
     const m = new Mesh(laneGeo, mat);
     m.position.set(laneXOf(i), 0, -TRACK_LEN / 2 + 4);
     m.receiveShadow = true;
+    m.movable = false;
     scene.add(m);
     laneMeshes.push(m);
     laneMats.push(mat);
@@ -260,6 +264,7 @@ function build(): void {
   for (let i = 0; i <= LANES; i++) {
     const e = new Mesh(edgeGeo, edgeMat);
     e.position.set(laneXOf(0) - LANE_W / 2 + i * LANE_W, 0.02, -TRACK_LEN / 2 + 4);
+    e.movable = false;
     scene.add(e);
     edges.push(e);
   }
@@ -293,6 +298,7 @@ function build(): void {
   pylonMat = tiered(spec("pylon"));
   pylons = new InstancedMesh(new CylinderGeometry(0.3, 0.55, 7, 6), pylonMat, PYLONS * 2);
   caps = new InstancedMesh(new OctahedronGeometry(0.24), capMat, PYLONS * 2);
+  pylons.movable = caps.movable = false;
   scene.add(pylons, caps);
   const archGeo = new TorusGeometry(LANE_W * LANES * 0.62, 0.09, Math.max(6, segments / 4), segments * 1.5, PI);
   for (let i = 0; i < 8; i++) {
@@ -642,7 +648,8 @@ export function update(view: View | null, dt: number, width: number, height: num
     r.position.x = laneX(i);
     (r.material as Lit).emissiveIntensity = 0.7 + laneFlash[i]! * 1.6 + (held ? 0.6 : 0);
     r.scale.setScalar(held ? 1.12 : 1);
-    laneMeshes[i]!.position.x = laneX(i);
+    const lane = laneMeshes[i]!, lx = laneX(i);
+    if (lane.position.x !== lx) { lane.position.x = lx; lane.matrixWorldNeedsUpdate = true; }
     laneMats[i]!.emissiveIntensity = 0.06 + laneFlash[i]! * 0.5 + (held ? 0.18 : 0);
   }
 

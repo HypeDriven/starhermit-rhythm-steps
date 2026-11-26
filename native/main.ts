@@ -24,7 +24,7 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // number, the old 600 ms), and the music follows the step clock (audio.ts).
 // The causeway is drawn between steps by the frame's interpolation.
 import "./i18n.ts";
-import { clipboard, frame, onFixedUpdate, onFocus, onRender, onResume, onStart, onSuspend, onUpdate, setFixedRate, levelSettings } from "starhermit:engine";
+import { clipboard, frame, onFixedUpdate, onFocus, onRender, onResume, onStart, onSuspend, onUpdate, setFixedRate, setTargetFps, levelSettings } from "starhermit:engine";
 import { onAction, onPointerButton, onTouch, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onSessionEnded, requestSignIn } from "starhermit:platform";
@@ -720,8 +720,20 @@ onFixedUpdate(() => {
 });
 
 let frameDt = 0;
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on phone levels
+ * (levelIndex <= 3) under a finger; none otherwise, the title included (the causeway shows behind
+ * its wash). Judgement runs on the fixed update's step count, so timing is unchanged. The engine
+ * sets it aside while its menus are open, and the player's frame-rate limit still applies. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = frame().levelIndex <= 3 && primaryPointer() === "coarse" ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
 onUpdate((dt) => {
   frameDt = dt;
+  capFrames();
   applyLook();
   applyContrast(ui.preferences().highContrast);
   const rm = ui.preferences().reducedMotion;
