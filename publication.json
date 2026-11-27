@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:01:06.546952+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-26T15:21:49.18818+00:00",
+    "coverArtUpdatedAt": "2026-11-27T17:07:30.939109+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-26T15:21:49.175528+00:00",
+      "deployedAt": "2026-11-27T17:07:30.928471+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.50.0",
+      "engineVersion": "1.53.0",
       "deployWarning": null
     },
     "description": "Tap and hold notes in time with the music to build combos along a glowing concert causeway.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-26T15:21:48.400Z",
-  "sourceCommit": "b1d371b2daa84804affbbfa8d249645fe0454aa4",
-  "bytesReceived": 1638472,
-  "archiveSha256": "cbba900ace581a05a21833143b9a0969ec9270b687b358a011deee0649dca273",
+  "publishedAt": "2026-11-27T17:07:31.101Z",
+  "sourceCommit": "1f5d9f15fc0e950d19073121431081c281129407",
+  "bytesReceived": 1640086,
+  "archiveSha256": "e5b61f4d36a63694e843c0086123e83832ac5150bd6772eeaa236c18c93717d0",
   "indexSha256": "5974e4520c2be8993e91324b2fd5351d0f1fe78ce127e11428f959710ee3066c",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 1638472,
+    "bytesReceived": 1640086,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.50.0",
+    "engineVersion": "1.53.0",
     "deployWarning": null
   },
   "liveVerification": {
