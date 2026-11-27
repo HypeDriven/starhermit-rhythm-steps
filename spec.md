@@ -2,8 +2,8 @@
 
 Rhythm Steps is a four-lane rhythm game on a reactive concert causeway made of light. Notes descend the
 lanes toward a glowing judgment line: tap them on the beat, hold the long glowing bars head to tail, and
-keep the combo alive. It is a StarHermit engine **script game** (engine 1.50.0, host API 1.50,
-`engine.minor=50`), played natively by the StarHermit client and in browsers by the engine's web runtime
+keep the combo alive. It is a StarHermit engine **script game** (engine 1.53.0, host API 1.53,
+`engine.minor=53`), played natively by the StarHermit client and in browsers by the engine's web runtime
 from one package. (The browser build's original design specification is in the git history before the
 engine port.)
 
@@ -191,16 +191,18 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 Cosmetic particle emitters use native GPU particles with automatic CPU fallback on devices or graphics tiers without GPU particle support.
 
-## Engine 1.50.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.50.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.49 `setTargetFps`).** Under a finger (`primaryPointer() === "coarse"`) the game caps itself at 30 frames a second on the phone graphics levels (`levelIndex` ≤ 3), where steady 33 ms frames replace uneven ones; elsewhere, the title included (the causeway shows behind its wash), there is no game cap. Judgement counts fixed-update steps, so timing is unchanged. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.53 `setTargetFps`).** Under a finger (`primaryPointer() === "coarse"`) the game caps itself at 30 frames a second on the phone graphics levels (`levelIndex` ≤ 3), where steady 33 ms frames replace uneven ones; elsewhere, the title included (the causeway shows behind its wash), there is no game cap. Judgement counts fixed-update steps, so timing is unchanged. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery (host API 1.49).** The floor, the lanes, the lane edges and the seeded pylons and caps are `movable = false`. The lanes move only when Mirror flips them; that write is made on change and signalled with `matrixWorldNeedsUpdate` (it was rewritten every frame). The notes, holds, receptors (they swell while held), the breathing judgement line, the arches, stars, pulses, motes and sparks stay movable. The sky's time uniform stays: it holds when the background is not animated.
+**Still scenery (host API 1.53).** The floor, the lanes, the lane edges and the seeded pylons and caps are `movable = false`. The lanes move only when Mirror flips them; that write is made on change and signalled with `matrixWorldNeedsUpdate` (it was rewritten every frame). The notes, holds, receptors (they swell while held), the breathing judgement line, the arches, stars, pulses, motes and sparks stay movable. The sky's time uniform stays: it holds when the background is not animated.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
